@@ -6,7 +6,7 @@ use libp2p::{
     },
     identity,
     noise,
-    swarm::{Swarm, SwarmBuilder, SwarmEvent},
+    swarm::{SwarmBuilder, SwarmEvent},
     tcp,
     websocket,
     Multiaddr, PeerId,
