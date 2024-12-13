@@ -5,8 +5,8 @@ use libp2p::{
     multiaddr::Protocol,
     noise,
     relay,
-    swarm::{SwarmBuilder, SwarmEvent},
-    tcp,
+    swarm::{SwarmEvent},
+    tcp::{self, TcpTransport},
     webrtc,
     websocket,
     yamux,
@@ -14,6 +14,7 @@ use libp2p::{
     PeerId,
     Swarm,
     Transport,
+    SwarmBuilder,
 };
 use std::{fs, path::Path};
 
@@ -43,13 +44,14 @@ async fn main() {
 
     // Configure transport: Combine TCP, WebSocket, and WebRTC
     let tcp_transport = tcp::Config::new();
+    let tcp_transport = TcpTransport::new(tcp_transport);
     let websocket_transport = websocket::WsConfig::new(tcp_transport.clone());
     let webrtc_transport = webrtc::Transport::new(local_key.clone());
     let transport = tcp_transport
         .or_transport(websocket_transport)
         .or_transport(webrtc_transport)
         .upgrade(upgrade::Version::V1)
-        .authenticate(noise::Config::xx(local_key.clone()).into_authenticated())
+        .authenticate(noise::Config::new(&local_key).unwrap().into_authenticated())
         .multiplex(yamux::Config::default())
         .boxed();
 
