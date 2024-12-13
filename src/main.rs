@@ -5,10 +5,10 @@ use libp2p::{
     },
     identity,
     noise,
-    swarm::{Swarm, SwarmBuilder, SwarmEvent, NetworkBehaviour, ConnectionHandler, ConnectionId, ConnectionEvent},
+    swarm::{Swarm, SwarmEvent, NetworkBehaviour, ConnectionHandler, ConnectionId, ConnectionEvent},
     tcp,
     websocket,
-    Multiaddr, PeerId,
+    Multiaddr, PeerId, SwarmBuilder,
 };
 use libp2p_mplex::MplexConfig;
 use std::error::Error;
