@@ -14,7 +14,7 @@ use libp2p::{
 };
 use std::error::Error;
 use libp2p::mplex::MplexConfig;
-use libp2p::webrtc;
+use libp2p::webrtc::Transport as WebRtcTransport;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -58,7 +58,7 @@ async fn build_transport(
 ) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error>> {
     let tcp_transport = tcp::Transport::new(tcp::Config::new());
     let ws_transport = websocket::WsConfig::new(tcp::Transport::new(tcp::Config::new()));
-    let webrtc_transport = webrtc::Transport::new(
+    let webrtc_transport = WebRtcTransport::new(
         local_key,
         webrtc::Config::new(),
     );
