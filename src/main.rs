@@ -6,8 +6,8 @@ use libp2p::{
     noise,
     relay,
     swarm::{SwarmEvent},
-    tcp::{self, TcpTransport},
-    webrtc,
+    tcp::{self, Config as TcpConfig},
+    webrtc::{self, Transport as WebRtcTransport},
     websocket,
     yamux,
     Multiaddr,
@@ -44,9 +44,9 @@ async fn main() {
 
     // Configure transport: Combine TCP, WebSocket, and WebRTC
     let tcp_transport = tcp::Config::new();
-    let tcp_transport = TcpTransport::new(tcp_transport);
+    let tcp_transport = tcp::TcpTransport::new(tcp_transport);
     let websocket_transport = websocket::WsConfig::new(tcp_transport.clone());
-    let webrtc_transport = webrtc::Transport::new(local_key.clone());
+    let webrtc_transport = WebRtcTransport::new(local_key.clone());
     let transport = tcp_transport
         .or_transport(websocket_transport)
         .or_transport(webrtc_transport)
