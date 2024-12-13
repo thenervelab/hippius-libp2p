@@ -1,4 +1,3 @@
-use async_std::task;
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
@@ -7,12 +6,10 @@ use libp2p::{
     },
     identity,
     noise,
-    relay,
-    swarm::{Swarm, SwarmEvent},
+    swarm::{Swarm, SwarmBuilder, SwarmEvent},
     tcp,
     websocket,
     Multiaddr, PeerId,
-    SwarmBuilder,
 };
 use std::error::Error;
 use libp2p::mplex;
@@ -24,12 +21,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let local_peer_id = PeerId::from(local_key.public());
     println!("Local peer id: {:?}", local_peer_id);
 
-    let transport = build_transport(local_key).await?;
+    let transport = build_transport(local_key.clone()).await?;
 
     let mut swarm = SwarmBuilder::with_existing_identity(local_key)
         .with_tokio()
-        .with_other_transport(transport)
-        .with_behaviour(|_| Default::default())
+        .with_other_transport(move |_| transport)
+        .with_behaviour(|_| Default::default())?
         .build();
 
 
@@ -59,7 +56,7 @@ async fn build_transport(
     local_key: identity::Keypair,
 ) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error>> {
     let tcp_transport = tcp::Transport::new(tcp::Config::new());
-    let ws_transport = websocket::WsConfig::new(tcp_transport.clone());
+    let ws_transport = websocket::WsConfig::new(tcp::Transport::new(tcp::Config::new()));
     let webrtc_transport = webrtc::Transport::new(
         local_key,
         webrtc::Config::new(),
