@@ -1,20 +1,87 @@
 use libp2p::{
     core::{
-        muxing::StreamMuxerBox,
-        transport::{Boxed, Transport},
-        upgrade,
+        upgrade::{DeniedUpgrade},
     },
     identity,
     noise,
     SwarmBuilder,
-    swarm::SwarmEvent,
+    swarm::{
+        handler::ConnectionHandler,
+        NetworkBehaviour,
+        ConnectionHandlerEvent,
+        SubstreamProtocol,
+        SwarmEvent,
+    },
     tcp,
     websocket,
-    Multiaddr, PeerId,
+    Multiaddr,
+    PeerId,
 };
+use libp2p_mplex::MplexConfig;
 use std::error::Error;
-use libp2p::mplex::MplexConfig;
-use libp2p::webrtc;
+use std::task::{Context, Poll};
+use void::Void;
+
+#[derive(NetworkBehaviour)]
+#[behaviour(connection_handler = "MyHandler", out_event = "MyBehaviourEvent")]
+pub struct MyBehaviour;
+
+#[derive(Debug)]
+pub enum MyBehaviourEvent {}
+
+impl Default for MyBehaviour {
+    fn default() -> Self {
+        Self
+    }
+}
+
+#[derive(Default)]
+pub struct MyHandler;
+
+impl ConnectionHandler for MyHandler {
+    type FromBehaviour = Void;
+    type ToBehaviour = Void;
+    type InboundProtocol = DeniedUpgrade;
+    type OutboundProtocol = DeniedUpgrade;
+    type InboundOpenInfo = ();
+    type OutboundOpenInfo = ();
+
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
+        SubstreamProtocol::new(DeniedUpgrade, ())
+    }
+
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
+        void::unreachable(event)
+    }
+
+    fn connection_keep_alive(&self) -> bool {
+        true
+    }
+
+    fn poll(
+        &mut self,
+        _: &mut Context<'_>,
+    ) -> Poll<
+        ConnectionHandlerEvent<
+            Self::OutboundProtocol,
+            Self::OutboundOpenInfo,
+            Self::ToBehaviour,
+        >,
+    > {
+        Poll::Pending
+    }
+
+    fn on_connection_event(
+        &mut self,
+        _event: libp2p::swarm::handler::ConnectionEvent<
+            Self::InboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundProtocol,
+            Self::OutboundOpenInfo,
+        >,
+    ) {
+    }
+}
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -22,20 +89,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let local_peer_id = PeerId::from(local_key.public());
     println!("Local peer id: {:?}", local_peer_id);
 
-    let transport = build_transport(local_key.clone()).await?;
-
     let mut swarm = SwarmBuilder::with_existing_identity(local_key)
         .with_tokio()
-        .with_other_transport(move |_| transport)?
-        .with_behaviour(|_| Default::default())
+        .with_tcp(tcp::Config::default(), noise::Config::new, || {
+            MplexConfig::new()
+        })?
+        .with_websocket(noise::Config::new, || {
+            MplexConfig::new()
+        })?
+        .with_behaviour(|_| MyBehaviour::default())?
+        .with_swarm_config(|_| Default::default())
         .build();
-
 
     let addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
     swarm.listen_on(addr)?;
 
     loop {
-        match swarm.next_event().await {
+        match swarm.select_next_some().await {
             SwarmEvent::NewListenAddr { address, .. } => {
                 println!("Listening on {:?}", address);
             }
@@ -51,27 +121,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ => {}
         }
     }
-}
-
-async fn build_transport(
-    local_key: identity::Keypair,
-) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error>> {
-    let tcp_transport = tcp::Transport::new(tcp::Config::new());
-    let ws_transport = websocket::WsConfig::new(tcp::Transport::new(tcp::Config::new()));
-    let webrtc_transport = webrtc::Transport::new(
-        local_key,
-        webrtc::Config::new(),
-    );
-
-    let noise_config = noise::Config::new(&local_key);
-
-    let transport = tcp_transport
-        .or_transport(ws_transport)
-        .or_transport(webrtc_transport)
-        .upgrade(upgrade::Version::V1)
-        .authenticate(noise_config)
-        .multiplex(MplexConfig::new())
-        .boxed();
-
-    Ok(transport)
 }
