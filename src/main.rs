@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut swarm = SwarmBuilder::with_existing_identity(local_key)
         .with_tokio()
         .with_other_transport(move |_| transport)
-        .with_behaviour(|_| Default::default())?
+        .with_behaviour(|_| Default::default())
         .build();
 
 
