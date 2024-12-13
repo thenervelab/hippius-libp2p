@@ -8,13 +8,14 @@ use libp2p::{
     identity,
     noise,
     relay,
-    swarm::{Swarm, SwarmEvent, SwarmBuilder},
+    swarm::{Swarm, SwarmEvent},
     tcp,
     websocket,
     Multiaddr, PeerId,
+    SwarmBuilder,
     mplex,
+    webrtc,
 };
-use libp2p::webrtc;
 use std::error::Error;
 
 #[async_std::main]
