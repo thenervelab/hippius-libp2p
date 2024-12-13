@@ -1,8 +1,19 @@
 use async_std::task;
 use libp2p::{
-    core::transport::upgrade, identity, multiaddr::Protocol, noise, relay, swarm::SwarmBuilder,
-    tcp::TcpConfig, webrtc::WebRtcTransport, websocket::WsConfig, yamux::YamuxConfig, Multiaddr,
-    PeerId, Swarm, Transport,
+    core::transport::upgrade,
+    identity,
+    multiaddr::Protocol,
+    noise,
+    relay,
+    swarm::{SwarmBuilder, SwarmEvent},
+    tcp,
+    webrtc,
+    websocket,
+    yamux,
+    Multiaddr,
+    PeerId,
+    Swarm,
+    Transport,
 };
 use std::{fs, path::Path};
 
@@ -31,15 +42,15 @@ async fn main() {
     println!("Relay Node ID: {}", local_peer_id);
 
     // Configure transport: Combine TCP, WebSocket, and WebRTC
-    let tcp_transport = TcpConfig::new();
-    let websocket_transport = WsConfig::new(tcp_transport.clone());
-    let webrtc_transport = WebRtcTransport::new(local_key.clone()).unwrap();
+    let tcp_transport = tcp::Config::new();
+    let websocket_transport = websocket::WsConfig::new(tcp_transport.clone());
+    let webrtc_transport = webrtc::Transport::new(local_key.clone());
     let transport = tcp_transport
         .or_transport(websocket_transport)
         .or_transport(webrtc_transport)
         .upgrade(upgrade::Version::V1)
-        .authenticate(noise::NoiseConfig::xx(local_key.clone()).unwrap())
-        .multiplex(YamuxConfig::default())
+        .authenticate(noise::Config::xx(local_key.clone()).into_authenticated())
+        .multiplex(yamux::Config::default())
         .boxed();
 
     // Set up the relay behavior
@@ -67,9 +78,13 @@ async fn main() {
 
     // Handle incoming connections
     loop {
-        match swarm.next().await {
-            Some(event) => println!("Relay event: {:?}", event),
-            None => break,
+        if let Some(event) = swarm.next().await {
+            match event {
+                SwarmEvent::NewListenAddr { address, .. } => {
+                    println!("Listening on {:?}", address);
+                }
+                event => println!("Relay event: {:?}", event),
+            }
         }
     }
 }

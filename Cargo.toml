@@ -5,4 +5,13 @@ edition = "2021"
 
 [dependencies]
 async-std = { version = "1.13.0", features = ["attributes"] }
-libp2p = { version = "0.54.1", features = [ "full"]}
+libp2p = { version = "0.54.1", features = [
+    "noise",
+    "relay",
+    "tcp",
+    "websocket",
+    "webrtc",
+    "yamux",
+    "swarm",
+    "identify"
+]}
