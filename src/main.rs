@@ -24,12 +24,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let transport = build_transport(local_key).await?;
 
-    let mut swarm = SwarmBuilder::with_tokio_executor(
-        transport,
-        Default::default(),
-        local_peer_id,
-    )
-    .build();
+    let mut swarm = SwarmBuilder::with_existing_identity(local_key)
+        .with_tokio()
+        .with_transport(transport)
+        .with_behaviour(|_| Default::default())
+        .build();
+
 
     let addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
     swarm.listen_on(addr)?;
