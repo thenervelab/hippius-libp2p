@@ -1,0 +1,8 @@
+[package]
+name = "hippius-libp2p"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-std = "1.13.0"
+libp2p = "0.54.1"
