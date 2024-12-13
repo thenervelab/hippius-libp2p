@@ -6,14 +6,15 @@ use libp2p::{
     },
     identity,
     noise,
-    swarm::{Swarm, SwarmBuilder, SwarmEvent},
+    swarm::{Swarm, SwarmEvent},
     tcp,
     websocket,
     webrtc,
-    Multiaddr, PeerId,
+    Multiaddr, PeerId, SwarmBuilder,
 };
 use std::error::Error;
-use futures::StreamExt;
+use futures::stream::StreamExt;
+use libp2p_mplex::MplexConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -75,7 +76,7 @@ fn build_transport(
         .or_transport(webrtc_transport)
         .upgrade(upgrade::Version::V1)
         .authenticate(noise_config)
-        .multiplex(libp2p::mplex::MplexConfig::new())
+        .multiplex(MplexConfig::new())
         .boxed();
 
     Ok(transport)
