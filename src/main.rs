@@ -12,6 +12,7 @@ use libp2p::{
     tcp,
     websocket,
     Multiaddr, PeerId,
+    mplex,
 };
 use libp2p::webrtc;
 use std::error::Error;
@@ -56,7 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn build_transport(
     local_key: identity::Keypair,
 ) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error>> {
-    let tcp_transport = tcp::TcpTransport::new(tcp::Config::new());
+    let tcp_transport = tcp::Transport::new(tcp::Config::new());
     let ws_transport = websocket::WsConfig::new(tcp_transport.clone());
     let webrtc_transport = webrtc::Transport::new(
         local_key,
@@ -70,7 +71,7 @@ async fn build_transport(
         .or_transport(webrtc_transport)
         .upgrade(upgrade::Version::V1)
         .authenticate(noise_config)
-        .multiplex(libp2p::mplex::MplexConfig::new())
+        .multiplex(mplex::MplexConfig::new())
         .boxed();
 
     Ok(transport)
