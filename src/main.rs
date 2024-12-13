@@ -8,10 +8,11 @@ use libp2p::{
     identity,
     noise,
     relay,
-    swarm::{Swarm, SwarmEvent, SwarmBuilder},
+    swarm::{Swarm, SwarmEvent},
     tcp,
     websocket,
     Multiaddr, PeerId,
+    SwarmBuilder,
 };
 use std::error::Error;
 use libp2p::mplex;
