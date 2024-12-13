@@ -13,7 +13,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use std::error::Error;
-use libp2p::mplex;
+use libp2p::mplex::MplexConfig;
 use libp2p::webrtc;
 
 #[async_std::main]
@@ -70,7 +70,7 @@ async fn build_transport(
         .or_transport(webrtc_transport)
         .upgrade(upgrade::Version::V1)
         .authenticate(noise_config)
-        .multiplex(mplex::MplexConfig::new())
+        .multiplex(MplexConfig::new())
         .boxed();
 
     Ok(transport)
