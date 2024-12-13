@@ -1,23 +1,21 @@
 use libp2p::{
     core::{
-        muxing::StreamMuxerBox,
         transport::{Boxed, Transport},
         upgrade,
     },
     identity,
     noise,
-    SwarmBuilder,
-    swarm::{SwarmEvent, NetworkBehaviour},
+    swarm::{Swarm, SwarmBuilder, SwarmEvent, NetworkBehaviour, ConnectionHandler, ConnectionId, ConnectionEvent},
     tcp,
     websocket,
     Multiaddr, PeerId,
-    futures::StreamExt,
 };
 use libp2p_mplex::MplexConfig;
 use std::error::Error;
-use std::time::Duration;
+use libp2p::webrtc;
+use void::Void;
 
-#[derive(NetworkBehaviour)]
+#[derive(NetworkBehaviour, Default)]
 #[behaviour(out_event = "MyBehaviourEvent", event_process = false)]
 struct MyBehaviour {
     #[behaviour(ignore)]
@@ -27,9 +25,23 @@ struct MyBehaviour {
 #[derive(Debug)]
 enum MyBehaviourEvent {}
 
-impl Default for MyBehaviour {
-    fn default() -> Self {
-        Self { _priv: () }
+impl ConnectionHandler for MyBehaviour {
+    type FromBehaviour = ();
+    type ToBehaviour = Void;
+    type InEvent = Void;
+    type OutEvent = Void;
+
+    fn on_connection_event(
+        &mut self,
+        _peer_id: PeerId,
+        _connection_id: ConnectionId,
+        _event: ConnectionEvent<Self::InEvent, Self::OutEvent>,
+    ) {
+    }
+}
+
+impl MyBehaviour {
+    fn on_behaviour_event(&mut self, _event: MyBehaviourEvent) {
     }
 }
 
@@ -41,7 +53,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let transport = build_transport(&local_key).await?;
 
-    let mut swarm = SwarmBuilder::with_tokio_executor(transport, MyBehaviour::default(), local_peer_id).build();
+    let mut swarm = SwarmBuilder::with_existing_identity(local_key)
+        .with_tokio()
+        .with_other_transport(move |_| transport)
+        .with_behaviour(|_| MyBehaviour::default())?
+        .build();
 
     let addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
     swarm.listen_on(addr)?;
@@ -67,18 +83,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn build_transport(
     local_key: &identity::Keypair,
-) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error>> {
+) -> Result<Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>, Box<dyn Error>> {
     let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default());
     let ws_transport = websocket::WsConfig::new(tcp::tokio::Transport::new(tcp::Config::default()));
 
-    let noise_config = noise::Config::new(local_key)?;
+    let noise_config = noise::Config::new(local_key);
 
     let transport = tcp_transport
         .or_transport(ws_transport)
         .upgrade(upgrade::Version::V1)
-        .authenticate(noise_config)
+        .authenticate(noise_config?)
         .multiplex(MplexConfig::new())
-        .timeout(Duration::from_secs(20))
         .boxed();
 
     Ok(transport)
