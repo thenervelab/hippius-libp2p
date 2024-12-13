@@ -7,4 +7,4 @@ edition = "2021"
 async-std = { version = "1.13.0", features = ["attributes"] }
 libp2p = { version = "0.54.1", features = [ "full"]}
 libp2p-mplex = "0.42.0"
-libp2p-webrtc = "0.8.0-alpha"
+libp2p-webrtc = "0.34.0"
