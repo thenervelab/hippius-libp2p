@@ -8,10 +8,10 @@ use libp2p::{
     identity,
     noise,
     relay,
-    swarm::{Swarm, SwarmEvent},
+    swarm::{Swarm, SwarmEvent, SwarmBuilder},
     tcp,
     websocket,
-    Multiaddr, PeerId, SwarmBuilder,
+    Multiaddr, PeerId,
 };
 use libp2p::webrtc;
 use std::error::Error;
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut swarm = SwarmBuilder::with_existing_identity(local_key)
         .with_tokio()
-        .with_transport(transport)
+        .with_other_transport(transport)
         .with_behaviour(|_| Default::default())
         .build();
 
