@@ -53,17 +53,9 @@ async fn main() {
         .build();
 
     // Listen on new ports to avoid IPFS conflicts
-    let listen_tcp: Multiaddr = Protocol::Ip4([0, 0, 0, 0].into())
-        .and_then(Protocol::Tcp(4501))
-        .into();
-    let listen_ws: Multiaddr = Protocol::Ip4([0, 0, 0, 0].into())
-        .and_then(Protocol::Tcp(4502))
-        .and_then(Protocol::Ws)
-        .into();
-    let listen_webrtc: Multiaddr = Protocol::Ip4([0, 0, 0, 0].into())
-        .and_then(Protocol::Udp(4503))
-        .and_then(Protocol::WebRtc)
-        .into();
+    let listen_tcp: Multiaddr = "/ip4/0.0.0.0/tcp/4501".parse().unwrap();
+    let listen_ws: Multiaddr = "/ip4/0.0.0.0/tcp/4502/ws".parse().unwrap();
+    let listen_webrtc: Multiaddr = "/ip4/0.0.0.0/udp/4503/webrtc".parse().unwrap();
 
     Swarm::listen_on(&mut swarm, listen_tcp).unwrap();
     Swarm::listen_on(&mut swarm, listen_ws).unwrap();
