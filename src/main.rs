@@ -54,7 +54,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .expect("Valid gossipsub behaviour");
 
     // Enable mDNS for peer discovery
-    let mdns = Behaviour::new(mdns::Config::default(), local_peer_id)?;
+    // Enable mDNS for peer discovery
+    let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
 
     // Combine Gossipsub, mDNS, and WebRTC into one behaviour
     let behaviour = MyBehaviour {
@@ -103,6 +104,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         println!("Discovered peer: {peer_id}");
                         swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                     }
+                }
+                 SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                    println!("Connection established with peer: {peer_id}");
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on: {address}");
