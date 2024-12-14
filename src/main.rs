@@ -2,19 +2,22 @@
 use libp2p::{
     core::upgrade,
     identity,
-    noise,
+    noise::{NoiseConfig, Keypair},
     ping,
-    swarm::{Swarm, SwarmEvent, SwarmBuilder, Config},
+    swarm::{Swarm, SwarmEvent, Config},
     tcp,
-    webrtc,
     websocket,
-    yamux,
+    yamux::YamuxConfig,
+    Multiaddr, PeerId, Transport,
+    SwarmBuilder,
+    webrtc,
     Multiaddr, PeerId, Transport,
 };
 use std::error::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use libp2p::swarm::NetworkBehaviour;
+use libp2p_swarm_derive::NetworkBehaviour;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -33,7 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let behaviour = Behaviour {
             ping,
         };
-        SwarmBuilder::with_options(transport, behaviour, local_peer_id, Config::default()).build()
+        SwarmBuilder::with_options(transport, behaviour, local_peer_id, Config::with_executor(tokio::task::spawn)).build()
     };
 
     let addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
@@ -45,10 +48,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 info!("Listening on {:?}", address);
             }
             SwarmEvent::Behaviour(BehaviourEvent::Ping(ping::Event {
-                peer_id,
-                result: Result::Ok(ping::Success::Ping { rtt }),
+                peer,
+                result: Result::Ok(ping::Success::Ping { rtt, .. }),
+                ..
             })) => {
-                info!("Ping: rtt to {:?} is {:?}", peer_id, rtt);
+                info!("Ping: rtt to {:?} is {:?}", peer, rtt);
             }
             _ => {}
         }
@@ -59,15 +63,15 @@ async fn build_transport(
     local_key: identity::Keypair,
 ) -> Result<impl Transport<Output = (PeerId, upgrade::Negotiated<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin>)>, Box<dyn Error>> {
     let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default().nodelay(true));
-    let ws_transport = websocket::tokio::Transport::new(websocket::Config::default());
+    let ws_transport = websocket::tokio::Transport::new(websocket::WsConfig::default());
     let webrtc_transport = webrtc::tokio::Transport::new(webrtc::Config::default(), local_key.clone());
 
     let transport = tcp_transport
         .or_transport(ws_transport)
         .or_transport(webrtc_transport);
 
-    let noise_config = noise::NoiseConfig::xx(noise::Keypair::new().unwrap());
-    let mux_config = yamux::YamuxConfig::default();
+    let noise_config = NoiseConfig::xx(Keypair::generate());
+    let mux_config = YamuxConfig::default();
 
     Ok(transport
         .upgrade(upgrade::Version::V1)
