@@ -18,7 +18,7 @@ mime_guess = "2.0.4"
 
 # Libp2p and WebRTC dependencies
 libp2p = { version = "0.54.1", features = ["gossipsub", "mdns", "noise", "yamux", "tcp"] }
-libp2p-derive = "0.45.0"
+libp2p-macros = "0.45.0"
 
 # Wasm dependencies for browser support
 js-sys = "0.3.69"
