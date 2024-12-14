@@ -1,20 +1,21 @@
 use std::{collections::hash_map::DefaultHasher, error::Error, hash::{Hash, Hasher}, time::Duration};
-use futures::stream::StreamExt;
 use libp2p::{
-    core::Multiaddr,
     gossipsub::{self, IdentTopic, MessageId},
-    mdns, noise,
-    swarm::{NetworkBehaviour, SwarmEvent},
+    mdns::{self, MdnsEvent},
+    noise,
+    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
     tcp, yamux,
     webrtc,
     PeerId,
+    SwarmBuilder,
 };
+use libp2p_derive::NetworkBehaviour;
 use tokio::select;
 
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::tokio::Behaviour,
+    mdns: mdns::Behaviour,
     webrtc: webrtc::tokio::Transport, // WebRTC for relaying client connections
 }
 
@@ -49,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .expect("Valid gossipsub behaviour");
 
     // Enable mDNS for peer discovery
-    let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
+    let mdns = mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?;
 
     // Combine Gossipsub, mDNS, and WebRTC into one behaviour
     let behaviour = MyBehaviour {
@@ -59,8 +60,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // Build the swarm
-    let mut swarm = libp2p::Swarm::builder(behaviour, local_key.clone())
-        .executor(Box::new(|fut| tokio::spawn(fut)))
+    let mut swarm = SwarmBuilder::with_existing_identity(local_key)
+        .with_tokio()
+        .with_behaviour(behaviour)
         .build();
 
     // Listen on TCP, QUIC, and WebRTC
@@ -73,7 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
 
     println!("Server is running. Listening on:");
-    for address in libp2p::Swarm::listeners(&swarm) {
+    for address in Swarm::listeners(&swarm) {
         println!("{address}");
     }
 
@@ -92,7 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         propagation_source
                     );
                 }
-                SwarmEvent::Behaviour(mdns::Event::Discovered(peers)) => {
+                SwarmEvent::Behaviour(MdnsEvent::Discovered(peers)) => {
                     for (peer_id, _) in peers {
                         println!("Discovered peer: {peer_id}");
                         swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
