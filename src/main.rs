@@ -11,7 +11,6 @@ use libp2p::{
     yamux,
     Multiaddr, PeerId, Transport,
 };
-use libp2p_webrtc_direct::WebRtcDirect;
 use std::error::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -31,10 +30,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut swarm = {
         let ping = ping::Behaviour::new(ping::Config::default());
-        let webrtc_direct = WebRtcDirect::new();
         let behaviour = Behaviour {
             ping,
-            webrtc_direct,
         };
         SwarmBuilder::with_options(transport, behaviour, local_peer_id, Config::default()).build()
     };
@@ -52,22 +49,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 result: Result::Ok(ping::Success::Ping { rtt }),
             })) => {
                 info!("Ping: rtt to {:?} is {:?}", peer_id, rtt);
-            }
-            SwarmEvent::Behaviour(BehaviourEvent::WebRtcDirect(
-                libp2p_webrtc_direct::Event::Connected { peer_id },
-            )) => {
-                info!("WebRTC Direct connected to {:?}", peer_id);
-            }
-            SwarmEvent::Behaviour(BehaviourEvent::WebRtcDirect(
-                libp2p_webrtc_direct::Event::Incoming { peer_id, .. },
-            )) => {
-                info!("WebRTC Direct incoming connection from {:?}", peer_id);
-            }
-            SwarmEvent::Behaviour(BehaviourEvent::WebRtcDirect(
-                libp2p_webrtc_direct::Event::Disconnected { peer_id },
-            )) => {
-                info!("WebRTC Direct disconnected from {:?}", peer_id);
-            }
             _ => {}
         }
     }
@@ -98,11 +79,9 @@ async fn build_transport(
 #[behaviour(out_event = "BehaviourEvent")]
 struct Behaviour {
     ping: ping::Behaviour,
-    webrtc_direct: WebRtcDirect,
 }
 
 #[derive(Debug)]
 enum BehaviourEvent {
     Ping(ping::Event),
-    WebRtcDirect(libp2p_webrtc_direct::Event),
 }
