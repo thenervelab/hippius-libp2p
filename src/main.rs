@@ -1,11 +1,10 @@
 use std::{collections::hash_map::DefaultHasher, error::Error, hash::{Hash, Hasher}, time::Duration};
 use libp2p::{
     gossipsub::{self, IdentTopic, MessageId},
-    mdns::{self, MdnsEvent},
+    mdns::{self, Event as MdnsEvent},
     noise,
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
     tcp, yamux,
-    webrtc,
     PeerId,
     SwarmBuilder,
 };
@@ -15,8 +14,8 @@ use tokio::select;
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::Behaviour,
-    webrtc: webrtc::tokio::Transport, // WebRTC for relaying client connections
+    mdns: mdns::tokio::Behaviour,
+    webrtc: libp2p::webrtc::tokio::Transport, // WebRTC for relaying client connections
 }
 
 #[tokio::main]
@@ -27,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Local peer id: {local_peer_id}");
 
     // WebRTC transport for relaying clients
-    let webrtc_transport = webrtc::tokio::Transport::new(webrtc::Config::new(&local_key));
+    let webrtc_transport = libp2p::webrtc::tokio::Transport::new(libp2p::webrtc::Config::new(&local_key));
 
     // Set up Gossipsub with content-addressable message IDs
     let message_id_fn = |message: &gossipsub::Message| {
@@ -50,7 +49,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .expect("Valid gossipsub behaviour");
 
     // Enable mDNS for peer discovery
-    let mdns = mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?;
+    let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
 
     // Combine Gossipsub, mDNS, and WebRTC into one behaviour
     let behaviour = MyBehaviour {
