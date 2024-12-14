@@ -4,7 +4,7 @@ use libp2p::{
     identity,
     noise,
     ping,
-    swarm::{Swarm, SwarmEvent},
+    swarm::{Swarm, SwarmEvent, SwarmBuilder, Config},
     tcp,
     webrtc,
     websocket,
@@ -15,6 +15,7 @@ use libp2p_webrtc_direct::WebRtcDirect;
 use std::error::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+use libp2p::swarm::NetworkBehaviour;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -29,20 +30,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let transport = build_transport(local_key).await?;
 
     let mut swarm = {
-        let ping = ping::Behaviour::new(ping::Config::new());
+        let ping = ping::Behaviour::new(ping::Config::default());
         let webrtc_direct = WebRtcDirect::new();
         let behaviour = Behaviour {
             ping,
             webrtc_direct,
         };
-        Swarm::new(transport, behaviour, local_peer_id)
+        SwarmBuilder::with_options(transport, behaviour, local_peer_id, Config::default()).build()
     };
 
     let addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
     swarm.listen_on(addr)?;
 
     loop {
-        match swarm.select_next_some().await {
+        match swarm.next_event().await {
             SwarmEvent::NewListenAddr { address, .. } => {
                 info!("Listening on {:?}", address);
             }
@@ -93,7 +94,8 @@ async fn build_transport(
         .boxed())
 }
 
-#[derive(libp2p::swarm::NetworkBehaviour)]
+#[derive(NetworkBehaviour)]
+#[behaviour(out_event = "BehaviourEvent")]
 struct Behaviour {
     ping: ping::Behaviour,
     webrtc_direct: WebRtcDirect,
@@ -103,16 +105,4 @@ struct Behaviour {
 enum BehaviourEvent {
     Ping(ping::Event),
     WebRtcDirect(libp2p_webrtc_direct::Event),
-}
-
-impl From<ping::Event> for BehaviourEvent {
-    fn from(event: ping::Event) -> Self {
-        BehaviourEvent::Ping(event)
-    }
-}
-
-impl From<libp2p_webrtc_direct::Event> for BehaviourEvent {
-    fn from(event: libp2p_webrtc_direct::Event) -> Self {
-        BehaviourEvent::WebRtcDirect(event)
-    }
 }
