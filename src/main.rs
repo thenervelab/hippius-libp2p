@@ -49,6 +49,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 result: Result::Ok(ping::Success::Ping { rtt }),
             })) => {
                 info!("Ping: rtt to {:?} is {:?}", peer_id, rtt);
+            }
             _ => {}
         }
     }
