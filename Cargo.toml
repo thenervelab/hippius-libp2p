@@ -4,8 +4,28 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-std = { version = "1.13.0", features = ["attributes"] }
-libp2p = { version = "0.54.1", features = [ "full"]}
-libp2p-mplex = "0.42.0"
-libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
-tokio = { version = "1", features = ["full"] }
+anyhow = "1.0.86"
+async-trait = "0.1.71"
+futures = "0.3.28"
+rand = "0.8.5"
+tracing = "0.1.38"
+tracing-subscriber = { version = "0.3"}
+tokio = { version = "1.36"}
+tokio-util = "0.7"
+tower = "0.5.2"
+tower-http = { version = "0.6.2" }
+mime_guess = "2.0.4"
+
+# Libp2p and WebRTC dependencies
+libp2p = { version = "0.54.1", features = ["gossipsub", "mdns", "noise", "yamux"] }
+
+# Wasm dependencies for browser support
+js-sys = "0.3.69"
+wasm-bindgen = "0.2.90"
+wasm-bindgen-futures = "0.4.42"
+web-sys = { version = "0.3.69", features = ["Document", "Element", "HtmlElement", "Node", "Response", "Window"] }
+tracing-wasm = "0.2.1"
+
+# Embedded resources (optional)
+rust-embed = { version = "8.4.0", features = ["include-exclude", "interpolate-folder-path"] }
+libp2p-webrtc = "0.8.0-alpha"
