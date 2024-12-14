@@ -8,7 +8,7 @@ use libp2p::{
     PeerId,
     SwarmBuilder,
 };
-use libp2p_derive::NetworkBehaviour;
+use libp2p::swarm::NetworkBehaviour;
 use tokio::select;
 
 #[derive(NetworkBehaviour)]
