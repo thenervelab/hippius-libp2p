@@ -1,12 +1,12 @@
-use crate::gossipsub::Behaviour;
-use libp2p::swarm::NetworkBehaviour;
 use libp2p::{
     gossipsub::{self, IdentTopic, MessageId},
     mdns::{self, Event as MdnsEvent},
     noise,
-    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
+    swarm::{Swarm, SwarmEvent},
     tcp, yamux, PeerId, SwarmBuilder,
 };
+use libp2p::swarm::NetworkBehaviour;
+use libp2p_webrtc::tokio as webrtc;
 use std::{
     collections::hash_map::DefaultHasher,
     error::Error,
@@ -18,8 +18,8 @@ use tokio::select;
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::tokio::Behaviour,
-    webrtc: libp2p::webrtc::tokio::Transport, // WebRTC for relaying client connections
+    mdns: libp2p_mdns::tokio::Behaviour,
+    webrtc: webrtc::Transport, // WebRTC for relaying client connections
 }
 
 #[tokio::main]
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // WebRTC transport for relaying clients
     let webrtc_transport =
-        libp2p::webrtc::tokio::Transport::new(libp2p::webrtc::Config::new(&local_key));
+        webrtc::Transport::new(libp2p_webrtc::Config::new(&local_key));
 
     // Set up Gossipsub with content-addressable message IDs
     let message_id_fn = |message: &gossipsub::Message| {
@@ -54,8 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .expect("Valid gossipsub behaviour");
 
     // Enable mDNS for peer discovery
-    // Enable mDNS for peer discovery
-    let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
+    let mdns = libp2p_mdns::tokio::Behaviour::new(libp2p_mdns::Config::default(), local_peer_id)?;
 
     // Combine Gossipsub, mDNS, and WebRTC into one behaviour
     let behaviour = MyBehaviour {
@@ -66,7 +65,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Build the swarm
     let mut swarm = SwarmBuilder::with_existing_identity(local_key)
-        .with_tokio()
         .with_behaviour(behaviour)
         .build();
 
@@ -100,14 +98,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     );
                 }
                 SwarmEvent::Behaviour(MdnsEvent::Discovered(peers)) => {
-                    for (peer_id, _) in peers {
-                        println!("Discovered peer: {peer_id}");
-                        swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-                    }
-                }
-                 SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                    println!("Connection established with peer: {peer_id}");
-                }
+                   for (peer_id, _) in peers {
+                       println!("Discovered peer: {peer_id}");
+                       swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                   }
+               }
+                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                   println!("Connection established with peer: {peer_id}");
+               }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on: {address}");
                 }
