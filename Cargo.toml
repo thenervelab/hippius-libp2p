@@ -18,7 +18,6 @@ mime_guess = "2.0.4"
 
 # Libp2p and WebRTC dependencies
 libp2p = { version = "0.54.1", features = ["gossipsub", "mdns", "noise", "yamux", "tcp"] }
-libp2p-derive = "0.45.0"
 
 # Wasm dependencies for browser support
 js-sys = "0.3.69"
@@ -29,5 +28,6 @@ tracing-wasm = "0.2.1"
 
 # Embedded resources (optional)
 rust-embed = { version = "8.4.0", features = ["include-exclude", "interpolate-folder-path"] }
-libp2p-webrtc = "0.8.0-alpha"
 libp2p-mplex = "0.42.0"
+
+libp2p-webrtc = {version = "0.8.0-alpha", features = ["tokio"]}
