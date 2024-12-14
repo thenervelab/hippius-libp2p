@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.94"
 futures = "0.3.31"
-libp2p = { version = "0.54.1", features = ["noise", "ping", "tcp", "webrtc", "websocket", "yamux"] }
+libp2p = { version = "0.54.1", features = ["noise", "ping", "tcp", "websocket", "yamux"] }
 libp2p-autonat = "0.13.0"
 libp2p-core = "0.42.0"
 libp2p-identity = "0.2.10"
@@ -16,9 +16,8 @@ libp2p-ping = "0.45.0"
 libp2p-plaintext = "0.42.0"
 libp2p-rendezvous = "0.15.0"
 libp2p-swarm = "0.45.1"
-libp2p-swarm-derive = { version = "0.35.0", features = ["macros"] }
+libp2p-swarm-derive = { version = "0.35.0" }
 libp2p-webrtc = "0.8.0-alpha"
-libp2p-webrtc = { git = "https://github.com/libp2p/rust-libp2p", branch = "master", package = "libp2p-webrtc" }
 rand = "0.8.5"
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0.133"
