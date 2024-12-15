@@ -138,8 +138,8 @@ impl P2pServer {
         let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert).boxed();
 
         // Combine transports using OrTransport
-        let transport = OrTransport::new(tcp_transport, webrtc_transport)
-            .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse()?)?;
+        let transport = OrTransport::new(tcp_transport, webrtc_transport);
+        let transport = transport.listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse()?)?;
 
         let swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .with_tokio()
