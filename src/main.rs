@@ -1,7 +1,6 @@
 use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use libp2p::SwarmBuilder;
-use libp2p::Transport;
 use libp2p::{
     core::muxing::StreamMuxerBox,
     core::{transport::OrTransport, upgrade},
@@ -144,9 +143,8 @@ impl P2pServer {
         // Combine transports using OrTransport
         let transport = OrTransport::new(tcp_transport, webrtc_transport);
 
-        let swarm = SwarmBuilder::with_tokio()
-            .transport(transport)
-            .behaviour(behaviour)
+        let swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
+            .with_tokio()
             .build();
 
         // Listen on TCP
