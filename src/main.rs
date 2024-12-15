@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 use std::hash::{Hash, Hasher, DefaultHasher};
-use futures_util::{StreamExt, SinkExt};
+use futures_util::{StreamExt, SinkExt, stream::Stream};
 use libp2p::{
     core::{
         transport::OrTransport,
@@ -23,6 +23,7 @@ use libp2p::{
     Transport as _,
     core::transport::Transport,
     Swarm,
+    core::muxing::StreamMuxerBox,
 };
 use libp2p::SwarmBuilder;
 use libp2p_webrtc::tokio::{
@@ -152,7 +153,7 @@ impl P2pServer {
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
             .map(|(peer_id, conn)| (peer_id, StreamMuxerBox::new(conn)))
-            .boxed();
+            .boxed() as libp2p::core::transport::BoxedTransport<((), libp2p::core::muxing::StreamMuxerBox)>;
 
         // Combine transports using OrTransport
         let transport = OrTransport::new(tcp_transport, webrtc_transport);
