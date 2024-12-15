@@ -224,6 +224,11 @@ When starting nodes, the application displays:
    Node PeerID: [unique identifier]
    ```
 
+Peer IDs are persistent across restarts:
+- Bootnode keys are stored in `data/bootnode/peer_id.key`
+- Regular node keys are stored in `data/node/peer_id.key`
+- Delete these files to generate new peer IDs
+
 These peer IDs are important for:
 - Identifying specific nodes in the network
 - Debugging connection issues

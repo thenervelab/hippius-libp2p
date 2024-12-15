@@ -16,7 +16,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     error::Error as StdError,
+    fs,
     hash::{Hash, Hasher},
+    path::PathBuf,
     sync::Arc,
     time::Duration,
 };
@@ -65,19 +67,32 @@ struct P2pServer {
 }
 
 impl P2pServer {
-    fn load_or_create_identity(is_bootnode: bool) -> std::result::Result<Keypair, Box<dyn StdError + Send + Sync + 'static>> {
-        if is_bootnode {
-            // For bootnode, generate a new random keypair
-            Ok(identity::Keypair::generate_ed25519())
-        } else {
-            // For regular nodes, generate a deterministic keypair based on process ID
-            let mut rng = rand::thread_rng();
-            Ok(identity::Keypair::generate_ed25519())
-        }
-    }
-
     async fn new(peer_map: PeerMap, is_bootnode: bool) -> std::result::Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        let local_key = Self::load_or_create_identity(is_bootnode)?;
+        // Create data directory if it doesn't exist
+        let data_dir = if is_bootnode {
+            PathBuf::from("data/bootnode")
+        } else {
+            PathBuf::from("data/node")
+        };
+        fs::create_dir_all(&data_dir)?;
+
+        // Try to load or create key pair
+        let key_file = data_dir.join("peer_id.key");
+        let local_key = if key_file.exists() {
+            // Load existing key
+            let key_bytes = fs::read(&key_file)?;
+            let key_str = String::from_utf8(key_bytes)?;
+            let key_bytes = bs58::decode(key_str).into_vec()?;
+            Keypair::from_protobuf_encoding(&key_bytes)?
+        } else {
+            // Generate new key
+            let local_key = Keypair::generate_ed25519();
+            let key_bytes = local_key.to_protobuf_encoding()?;
+            let key_str = bs58::encode(key_bytes).into_string();
+            fs::write(&key_file, key_str)?;
+            local_key
+        };
+
         let local_peer_id = PeerId::from(local_key.public());
 
         // Set up gossipsub
