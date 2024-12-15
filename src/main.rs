@@ -12,7 +12,7 @@ use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent},
     tcp, yamux, Multiaddr, PeerId, Swarm,
 };
-use libp2p_webrtc::tokio::{certificate::Certificate};
+use libp2p_webrtc::tokio::certificate::Certificate;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -140,8 +140,7 @@ impl P2pServer {
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert);
-        let webrtc_boxed = webrtc_transport
-            .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse().unwrap())?
+        let webrtc_boxed = Box::new(webrtc_transport)
             .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
             .boxed()
             as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
