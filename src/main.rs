@@ -14,16 +14,18 @@ use libp2p::{
 use rand::{rngs::ThreadRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::HashMap,
     error::Error as StdError,
     hash::{Hash, Hasher},
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::RwLock;
-use tracing_subscriber::EnvFilter;
+use tokio::{
+    io::AsyncBufReadExt,
+    sync::RwLock,
+};
 
-type PeerMap = Arc<RwLock<std::collections::HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>;
+type PeerMap = Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>;
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ServerBehaviourEvent")]
@@ -53,11 +55,13 @@ impl From<mdns::Event> for ServerBehaviourEvent {
 #[derive(Debug, Serialize, Deserialize)]
 enum Message {
     PeerMessage { from_peer: String, message: Vec<u8> },
+    Command { command: String, args: Vec<String> },
 }
 
 struct P2pServer {
     swarm: Swarm<ServerBehaviour>,
     peer_map: PeerMap,
+    topics: HashMap<String, IdentTopic>,
 }
 
 impl P2pServer {
@@ -142,7 +146,11 @@ impl P2pServer {
             }
         }
 
-        Ok(Self { swarm, peer_map })
+        Ok(Self { 
+            swarm, 
+            peer_map,
+            topics: HashMap::new(),
+        })
     }
 
     async fn broadcast_message(&mut self, from_peer: String, message: Vec<u8>) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
@@ -163,12 +171,62 @@ impl P2pServer {
         Ok(())
     }
 
+    async fn handle_command(&mut self, command: &str, args: &[String]) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+        match command {
+            "/create-topic" | "/join-topic" if !args.is_empty() => {
+                let topic_name = &args[0];
+                let topic = IdentTopic::new(topic_name);
+                self.topics.insert(topic_name.clone(), topic.clone());
+                self.swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
+                println!("Subscribed to topic: {}", topic_name);
+            }
+            "/send" if args.len() >= 2 => {
+                let topic_name = &args[0];
+                let message = &args[1];
+                if let Some(topic) = self.topics.get(topic_name) {
+                    self.broadcast_message_to_topic(topic.clone(), message.as_bytes().to_vec()).await?;
+                } else {
+                    println!("Not subscribed to topic: {}", topic_name);
+                }
+            }
+            _ => {
+                println!("Unknown command or invalid arguments");
+                println!("Available commands:");
+                println!("  /create-topic <topic>    - Create and join a new topic");
+                println!("  /join-topic <topic>      - Join an existing topic");
+                println!("  /send <topic> <message>  - Send a message to a topic");
+            }
+        }
+        Ok(())
+    }
+
+    async fn broadcast_message_to_topic(&mut self, topic: IdentTopic, message: Vec<u8>) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+        self.swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic, message)?;
+        Ok(())
+    }
+
     async fn start(mut self) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
-        let topic = IdentTopic::new("chat");
-        self.swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
+        let mut stdin = tokio::io::BufReader::new(tokio::io::stdin()).lines();
 
         loop {
             tokio::select! {
+                line = stdin.next_line() => {
+                    if let Ok(Some(line)) = line {
+                        if line.starts_with('/') {
+                            let parts: Vec<String> = line.split_whitespace().map(String::from).collect();
+                            if !parts.is_empty() {
+                                let command = &parts[0];
+                                let args = &parts[1..];
+                                if let Err(e) = self.handle_command(command, args.to_vec().as_slice()).await {
+                                    println!("Error handling command: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
                 event = self.swarm.select_next_some() => match event {
                     SwarmEvent::Behaviour(ServerBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
                         for (peer_id, _) in list {
@@ -205,10 +263,10 @@ impl P2pServer {
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let peer_map = Arc::new(RwLock::new(std::collections::HashMap::new()));
+    let peer_map = Arc::new(RwLock::new(HashMap::new()));
     
     // Start the P2P server
     let server = P2pServer::new(peer_map.clone(), false).await?;
