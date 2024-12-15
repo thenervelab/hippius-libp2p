@@ -3,7 +3,7 @@ use futures_util::{SinkExt, StreamExt};
 use libp2p::SwarmBuilder;
 use libp2p::{
     core::muxing::StreamMuxerBox,
-    core::{transport::{OrTransport, Transport}, upgrade},
+    core::{transport::{OrTransport, Transport, Boxed}, upgrade},
     gossipsub::{self},
     identity,
     mdns::{self, tokio::Behaviour as MdnsBehaviour},
