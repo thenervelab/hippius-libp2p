@@ -3,28 +3,40 @@ use std::{
     error::Error as StdError,
     sync::Arc,
     time::Duration,
-    hash::{Hash, Hasher},
-    collections::hash_map::DefaultHasher,
 };
+use std::hash::{Hash, Hasher, DefaultHasher};
 use futures_util::{StreamExt, SinkExt};
+use either::Either;
 use libp2p::{
-    gossipsub, mdns, noise,
-    swarm::{NetworkBehaviour, derive_prelude::*, SwarmEvent},
-    tcp, yamux, PeerId, Multiaddr,
-    identity::{self, Keypair},
-    core::upgrade,
-    SwarmBuilder,
+    core::{
+        muxing::StreamMuxerBox,
+        transport::{OrTransport},
+        upgrade,
+    },
+    gossipsub::{self},
+    identity,
+    mdns::{self, tokio::Behaviour as MdnsBehaviour},
+    noise,
+    swarm::{NetworkBehaviour, SwarmEvent},
+    tcp,
+    yamux,
+    Multiaddr,
+    PeerId,
+    Transport,
+    Swarm,
 };
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::RwLock,
-    time,
+use libp2p::SwarmBuilder;
+use libp2p_webrtc::tokio::{
+    Transport as WebRTCTransport,
+    certificate::Certificate,
+    Error as WebRTCError,
 };
+use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::Message;
 use tracing_subscriber::EnvFilter;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use clap::Parser;
+use rand::thread_rng;
 
 // Custom result type for our application logic
 type AppResult<T> = std::result::Result<T, Box<dyn StdError + Send + Sync + 'static>>;
@@ -48,13 +60,32 @@ struct Args {
 type PeerMap = Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>;
 
 #[derive(NetworkBehaviour)]
+#[behaviour(out_event = "ServerBehaviourEvent")]
 struct ServerBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::tokio::Behaviour,
+    mdns: MdnsBehaviour,
+}
+
+#[derive(Debug)]
+enum ServerBehaviourEvent {
+    Gossipsub(gossipsub::Event),
+    Mdns(mdns::Event),
+}
+
+impl From<gossipsub::Event> for ServerBehaviourEvent {
+    fn from(event: gossipsub::Event) -> Self {
+        ServerBehaviourEvent::Gossipsub(event)
+    }
+}
+
+impl From<mdns::Event> for ServerBehaviourEvent {
+    fn from(event: mdns::Event) -> Self {
+        ServerBehaviourEvent::Mdns(event)
+    }
 }
 
 struct P2pServer {
-    swarm: libp2p::Swarm<ServerBehaviour>,
+    swarm: Swarm<ServerBehaviour>,
     peer_map: PeerMap,
 }
 
@@ -68,7 +99,7 @@ enum ServerMessage {
 }
 
 impl P2pServer {
-    async fn load_or_create_identity(is_bootnode: bool) -> AppResult<Keypair> {
+    async fn load_or_create_identity(is_bootnode: bool) -> AppResult<identity::Keypair> {
         let key_file = if is_bootnode { "bootnode.key" } else { "node.key" };
         
         if let Ok(bytes) = std::fs::read(key_file) {
@@ -99,27 +130,41 @@ impl P2pServer {
             .build()
             .expect("Valid config");
 
-        let behaviour = ServerBehaviour {
-            gossipsub: gossipsub::Behaviour::new(
-                gossipsub::MessageAuthenticity::Signed(local_key.clone()),
-                gossipsub_config,
-            )?,
-            mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
+        let gossipsub = gossipsub::Behaviour::new(
+            gossipsub::MessageAuthenticity::Signed(local_key.clone()),
+            gossipsub_config,
+        )?;
+
+        let mut behaviour = ServerBehaviour {
+            gossipsub: gossipsub,
+            mdns: mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?,
         };
 
-        let noise_config = noise::Config::new(&local_key).unwrap();
+        let mut rng = thread_rng();
+        let certificate = Certificate::generate(&mut rng)?;
+
+        // Combine transports using OrTransport
+        let transport = |keypair: &libp2p::identity::Keypair| {
+            let tcp = tcp::tokio::Transport::new(tcp::Config::default())
+                .upgrade(upgrade::Version::V1)
+                .authenticate(noise::Config::new(keypair).unwrap())
+                .multiplex(yamux::Config::default());
+
+            let cert = Certificate::generate(&mut thread_rng()).unwrap();
+            let webrtc = WebRTCTransport::new(keypair.clone(), cert);
+
+            OrTransport::new(tcp, webrtc)
+        };
+
         let mut swarm = SwarmBuilder::with_existing_identity(local_key.clone())
             .with_tokio()
-            .with_tcp(
-                tcp::Config::default(),
-                |_: &_| Ok::<_, Box<dyn StdError + Send + Sync>>(noise_config.clone()),
-                yamux::Config::default,
-            )?
+            .with_other_transport(transport)
             .with_behaviour(|_| Ok(behaviour))?
             .build();
 
-        // Listen on all interfaces
+        // Listen on both TCP and WebRTC
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+        swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse()?)?;
 
         Ok(Self { swarm, peer_map })
     }
@@ -210,7 +255,7 @@ impl P2pServer {
 
 async fn handle_connection(
     peer_map: PeerMap,
-    raw_stream: TcpStream,
+    raw_stream: tokio::net::TcpStream,
     addr: std::net::SocketAddr
 ) {
     println!("New WebSocket connection: {}", addr);
@@ -222,7 +267,7 @@ async fn handle_connection(
     let (mut write, mut read) = ws_stream.split();
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let peer_id = Uuid::new_v4().to_string();
+    let peer_id = uuid::Uuid::new_v4().to_string();
     println!("Peer {} connected", peer_id);
 
     // Add peer to the map
@@ -340,7 +385,7 @@ async fn main() -> AppResult<()> {
 
     // Start WebSocket server
     let addr = format!("0.0.0.0:{}", args.port);
-    let listener = TcpListener::bind(&addr).await.map_err(|e| Box::new(e) as Box<dyn StdError + Send + Sync>)?;
+    let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| Box::new(e) as Box<dyn StdError + Send + Sync>)?;
     println!("WebSocket server listening on: {}", addr);
 
     let server_handle = tokio::spawn(async move {
