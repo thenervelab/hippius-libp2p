@@ -42,7 +42,7 @@ A robust peer-to-peer networking application built with Rust and LibP2P, support
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/hippius-libp2p.git
+   git clone https://github.com/thenervelab/hippius-libp2p.git
    cd hippius-libp2p
    ```
 
