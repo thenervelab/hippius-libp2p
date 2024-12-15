@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 futures = "0.3"
-libp2p = { version = "0.52", features = [
+libp2p = { version = "0.53", features = [
     "identify",
     "macros",
     "noise",
@@ -16,7 +16,6 @@ libp2p = { version = "0.52", features = [
     "yamux",
     "mdns",
     "gossipsub",
-    "quic",
     "kad",
     "dns",
 ] }
@@ -31,3 +30,4 @@ base64 = "0.21"
 futures-util = "0.3"
 once_cell = "1.19"
 clap = { version = "4.4", features = ["derive"] }
+libp2p-webrtc = { version = "0.8.0-alpha",  features = ["tokio"]}
