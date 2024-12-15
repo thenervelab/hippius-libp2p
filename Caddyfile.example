@@ -1,0 +1,70 @@
+# Example Caddyfile for Hippius LibP2P
+# Replace example.com with your actual domain
+
+example.com {
+    # Web interface
+    handle /* {
+        reverse_proxy localhost:3000
+    }
+
+    # WebSocket signaling server
+    handle /signal* {
+        reverse_proxy localhost:8001 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Metrics endpoint (protected)
+    handle /metrics* {
+        basicauth {
+            prometheus JDJhJDEwJDNrS0FQdVp6NmRDQTNrQWZvY09oL09qbkouNHBZeUxXU3VwYkZYUnlqY0dYVi5vWnBHVTNL
+        }
+        reverse_proxy localhost:9091
+    }
+
+    # General settings
+    encode gzip
+    tls {
+        protocols tls1.2 tls1.3
+    }
+
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Disable FLoC tracking
+        Permissions-Policy "interest-cohort=()"
+        # XSS Protection
+        X-XSS-Protection "1; mode=block"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove Server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+
+# Metrics subdomain (alternative approach)
+metrics.example.com {
+    reverse_proxy localhost:9091
+
+    basicauth /* {
+        prometheus JDJhJDEwJDNrS0FQdVp6NmRDQTNrQWZvY09oL09qbkouNHBZeUxXU3VwYkZYUnlqY0dYVi5vWnBHVTNL
+    }
+
+    tls {
+        protocols tls1.2 tls1.3
+    }
+}

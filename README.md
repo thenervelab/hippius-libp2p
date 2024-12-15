@@ -53,9 +53,9 @@ There are several ways to run the application:
    cargo run -- --mode all
    ```
    This starts:
-   - 🌐 Web client server at http://localhost:8080
-   - 📡 WebRTC signaling server at ws://localhost:8000
-   - 🔄 P2P bootnode at /ip4/127.0.0.1/tcp/4001
+   - Web client server at http://localhost:3000
+   - WebRTC signaling server at ws://localhost:8001
+   - P2P bootnode at /ip4/127.0.0.1/tcp/4002
 
    The application will display:
    - URLs for accessing each server
@@ -63,7 +63,7 @@ There are several ways to run the application:
    - Each node's unique peer ID when started
 
    Then:
-   1. Open http://localhost:8080 in multiple browser windows
+   1. Open http://localhost:3000 in multiple browser windows
    2. Watch as peers automatically discover each other
    3. Click on peers to establish WebRTC connections
    4. Start chatting peer-to-peer!
@@ -85,8 +85,8 @@ There are several ways to run the application:
    ```
    This starts:
    - A regular P2P node
-   - Web client server (http://localhost:8080)
-   - Signaling server (ws://localhost:8000)
+   - Web client server (http://localhost:3000)
+   - Signaling server (ws://localhost:8001)
 
 You can customize the ports using:
 - `--web-port <PORT>` for the web server
@@ -95,7 +95,7 @@ You can customize the ports using:
 
 Example with custom ports:
 ```bash
-cargo run -- --mode all --web-port 3000 --signaling-port 3001 --bootnode-port 4001
+cargo run -- --mode all --web-port 3000 --signaling-port 8001 --bootnode-port 4002
 ```
 
 ## Quick Start
@@ -108,9 +108,9 @@ cargo run -- --mode all
 ```
 
 This starts:
-- 🌐 Web client server at http://localhost:8080
-- 📡 WebRTC signaling server at ws://localhost:8000
-- 🔄 P2P bootnode at /ip4/127.0.0.1/tcp/4001
+- Web client server at http://localhost:3000
+- WebRTC signaling server at ws://localhost:8001
+- P2P bootnode at /ip4/127.0.0.1/tcp/4002
 
 The application will display:
 - URLs for accessing each server
@@ -118,7 +118,7 @@ The application will display:
 - Each node's unique peer ID when started
 
 Then:
-1. Open http://localhost:8080 in multiple browser windows
+1. Open http://localhost:3000 in multiple browser windows
 2. Watch as peers automatically discover each other
 3. Click on peers to establish WebRTC connections
 4. Start chatting peer-to-peer!
@@ -149,8 +149,8 @@ Customize any port:
 ```bash
 cargo run -- --mode all \
   --web-port 3000 \        # Web client
-  --signaling-port 3001 \  # WebRTC signaling
-  --bootnode-port 4001     # P2P bootnode
+  --signaling-port 8001 \  # WebRTC signaling
+  --bootnode-port 4002     # P2P bootnode
 ```
 
 ### Common Scenarios
@@ -180,8 +180,8 @@ cargo run -- --mode all \
    ```
    This starts:
    - A regular P2P node
-   - Web client server (http://localhost:8080)
-   - Signaling server (ws://localhost:8000)
+   - Web client server (http://localhost:3000)
+   - Signaling server (ws://localhost:8001)
 
 ### Example: Setting Up a Local Test Network
 
@@ -197,17 +197,17 @@ cargo run -- --mode all \
    cargo run -- --mode node
    ```
    Each node will run its own:
-   - Web client (on port 8080)
-   - Signaling server (on port 8000)
+   - Web client (on port 3000)
+   - Signaling server (on port 8001)
    - P2P node
 
-3. Open http://localhost:8080 in your browser for each node
+3. Open http://localhost:3000 in your browser for each node
 
 Now you have:
-- ✅ WebRTC-enabled web clients
-- ✅ P2P network with bootnode
-- ✅ Automatic peer discovery
-- ✅ Direct peer-to-peer messaging
+- WebRTC-enabled web clients
+- P2P network with bootnode
+- Automatic peer discovery
+- Direct peer-to-peer messaging
 
 ### Network Information
 
@@ -215,7 +215,7 @@ When starting nodes, the application displays:
 
 1. For bootnodes:
    ```
-   Bootnode: /ip4/127.0.0.1/tcp/4001
+   Bootnode: /ip4/127.0.0.1/tcp/4002
    Bootnode PeerID: [unique identifier]
    ```
 
@@ -239,17 +239,100 @@ These peer IDs are important for:
 
 1. If web client shows "Disconnected":
    - Ensure signaling server is running
-   - Check if WebSocket port (default: 8000) is accessible
+   - Check if WebSocket port (default: 8001) is accessible
 
 2. If peers don't connect:
    - Verify bootnode is running
-   - Check if TCP port (default: 4001) is accessible
+   - Check if TCP port (default: 4002) is accessible
    - Ensure no firewall is blocking connections
 
 3. If WebRTC fails:
    - Check browser console for errors
    - Ensure STUN/TURN servers are accessible
    - Verify both peers can reach the signaling server
+
+## Monitoring and Metrics
+
+The application includes comprehensive monitoring for all components:
+
+### Metrics Server
+
+Access metrics at:
+- Prometheus metrics: http://localhost:9091/metrics
+- JSON stats: http://localhost:9091/stats
+
+### Network Metrics
+
+Monitor P2P network performance:
+- Connected peers count
+- Messages sent/received
+- Bandwidth usage
+- Per-peer statistics
+- Connection types (direct/STUN/TURN)
+- Network latency
+
+### System Metrics
+
+Track system resources:
+- CPU usage
+- Memory usage
+- Disk usage
+- Thread count
+- Process uptime
+
+### WebSocket Metrics
+
+Monitor signaling server:
+- Active connections
+- Total connections
+- Messages sent/received
+- Connection duration
+
+### Prometheus Integration
+
+Use with Prometheus and Grafana:
+```yaml
+scrape_configs:
+  - job_name: 'hippius-libp2p'
+    static_configs:
+      - targets: ['localhost:9091']
+```
+
+### Example Queries
+
+1. Network health:
+   ```promql
+   rate(p2p_messages_received[5m])  # Message rate
+   p2p_connected_peers              # Current peers
+   ```
+
+2. System load:
+   ```promql
+   system_cpu_usage                 # CPU usage
+   system_memory_usage             # Memory usage
+   ```
+
+3. WebSocket activity:
+   ```promql
+   ws_active_connections          # Current WebSocket connections
+   rate(ws_messages_sent[5m])     # WebSocket message rate
+   ```
+
+### Monitoring Dashboard
+
+For visualization:
+1. Install Grafana
+2. Add Prometheus data source
+3. Import the provided dashboard (docs/grafana-dashboard.json)
+4. View real-time metrics
+
+### Bandwidth Usage
+
+Track data transfer:
+- Total bytes sent/received
+- Per-peer bandwidth
+- TURN server relay usage
+- WebSocket signaling traffic
 
 ## Web Client
 
@@ -351,7 +434,7 @@ The signaling server exposes a WebSocket endpoint at `/signal` that accepts the 
 ### Example WebRTC Client Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/signal');
+const ws = new WebSocket('ws://localhost:8001/signal');
 const peer_id = 'peer_' + Math.random().toString(36).substr(2, 9);
 
 // Register with the signaling server
@@ -385,6 +468,63 @@ ws.onmessage = async (event) => {
 - Implement authentication for peer registration
 - Use TURN servers for NAT traversal in restricted networks
 - Consider rate limiting for DoS protection
+
+## WebRTC Configuration
+
+### TURN Server Support
+
+The application includes full TURN server support for reliable WebRTC connections:
+- Configuration in `config/turn_config.json`
+- Bandwidth monitoring and logging
+- Automatic fallback: Direct → STUN → TURN
+- See [TURN Server Setup Guide](docs/TURN_SERVER_SETUP.md)
+
+### Bandwidth Monitoring
+
+Monitor TURN server usage in real-time:
+- Bandwidth usage per connection
+- Total data transferred
+- Connection types (direct/STUN/TURN)
+- Logs stored in `logs/turn_bandwidth.log`
+
+### Configuration Options
+
+1. Default (Development):
+   ```json
+   {
+       "stun": {
+           "urls": ["stun:stun.l.google.com:19302"]
+       }
+   }
+   ```
+
+2. Production (with TURN):
+   ```json
+   {
+       "stun": {
+           "urls": ["stun:stun.l.google.com:19302"]
+       },
+       "turn": {
+           "urls": ["turn:your-server.com:3478"],
+           "username": "your-username",
+           "credential": "your-password"
+       },
+       "monitoring": {
+           "enabled": true,
+           "interval_ms": 5000
+       }
+   }
+   ```
+
+### Monitoring Dashboard
+
+View connection statistics:
+1. Open browser console
+2. Monitor real-time bandwidth usage
+3. Check connection types
+4. View total data transferred
+
+For detailed setup instructions, see [TURN Server Setup Guide](docs/TURN_SERVER_SETUP.md)
 
 ## Usage Examples
 

@@ -36,4 +36,8 @@ clap = { version = "4.4", features = ["derive"] }
 libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
 uuid = { version = "1.6", features = ["v4"] }
 bs58 = "0.5.0"
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+sysinfo = "0.29"
+axum = "0.7.9"
 # Remove explicit libp2p-core dependency as it's included in libp2p

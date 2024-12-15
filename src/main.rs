@@ -29,6 +29,11 @@ use tokio::{
 
 type PeerMap = Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>;
 
+mod monitoring;
+mod metrics_server;
+
+use monitoring::Monitoring;
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ServerBehaviourEvent")]
 struct ServerBehaviour {
@@ -64,6 +69,7 @@ struct P2pServer {
     swarm: Swarm<ServerBehaviour>,
     peer_map: PeerMap,
     topics: HashMap<String, IdentTopic>,
+    monitoring: Arc<Monitoring>,
 }
 
 impl P2pServer {
@@ -161,10 +167,13 @@ impl P2pServer {
             }
         }
 
+        let monitoring = Arc::new(Monitoring::new());
+
         Ok(Self { 
             swarm, 
             peer_map,
             topics: HashMap::new(),
+            monitoring,
         })
     }
 
@@ -223,7 +232,15 @@ impl P2pServer {
         Ok(())
     }
 
-    async fn start(mut self) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+    async fn start(&mut self) -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+        // Start metrics server
+        let monitoring = self.monitoring.clone();
+        tokio::spawn(async move {
+            if let Err(e) = metrics_server::start_metrics_server(monitoring).await {
+                eprintln!("Metrics server error: {}", e);
+            }
+        });
+
         let mut stdin = tokio::io::BufReader::new(tokio::io::stdin()).lines();
 
         loop {
@@ -258,6 +275,7 @@ impl P2pServer {
                         message_id: id,
                         message,
                     })) => {
+                        self.monitoring.record_message_received(&peer_id, message.data.len() as u64).await;
                         println!(
                             "Got message: {} with id: {} from peer: {:?}",
                             String::from_utf8_lossy(&message.data),
@@ -267,6 +285,12 @@ impl P2pServer {
                     }
                     SwarmEvent::NewListenAddr { address, .. } => {
                         println!("Listening on {:?}", address);
+                    }
+                    SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                        self.monitoring.record_peer_connected(peer_id, "direct").await;
+                    }
+                    SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                        self.monitoring.record_peer_disconnected(&peer_id).await;
                     }
                     _ => {}
                 }
@@ -292,15 +316,15 @@ struct Args {
     mode: String,
 
     /// Port for signaling server
-    #[arg(long, default_value = "8000")]
+    #[arg(long, default_value = "8001")]
     signaling_port: u16,
 
     /// Port for web server
-    #[arg(long, default_value = "8080")]
+    #[arg(long, default_value = "3000")]
     web_port: u16,
 
     /// Port for bootnode
-    #[arg(long, default_value = "4001")]
+    #[arg(long, default_value = "4002")]
     bootnode_port: u16,
 }
 
@@ -317,10 +341,11 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
             println!("Starting all servers...");
             println!("Web server: http://localhost:{}", args.web_port);
             println!("Signaling server: ws://localhost:{}", args.signaling_port);
+            println!("Metrics server: http://localhost:9091");
             
             // Start web server, signaling server, and bootnode
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let bootnode = P2pServer::new(peer_map.clone(), true).await?;
+            let mut bootnode = P2pServer::new(peer_map.clone(), true).await?;
             println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
             println!("Bootnode PeerID: {}", bootnode.peer_id());
             
@@ -343,7 +368,7 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
         "bootnode" => {
             println!("Starting bootnode...");
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let server = P2pServer::new(peer_map.clone(), true).await?;
+            let mut server = P2pServer::new(peer_map.clone(), true).await?;
             println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
             println!("Bootnode PeerID: {}", server.peer_id());
             server.start().await?;
@@ -354,7 +379,7 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
             println!("Signaling server: ws://localhost:{}", args.signaling_port);
             
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let server = P2pServer::new(peer_map.clone(), false).await?;
+            let mut server = P2pServer::new(peer_map.clone(), false).await?;
             println!("Node PeerID: {}", server.peer_id());
             
             tokio::join!(

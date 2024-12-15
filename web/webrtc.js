@@ -1,16 +1,26 @@
-class P2PChat {
+class TURNManager {
     constructor() {
-        this.peer_id = 'peer_' + Math.random().toString(36).substr(2, 9);
-        this.peers = new Map(); // peer_id -> RTCPeerConnection
-        this.dataChannels = new Map(); // peer_id -> RTCDataChannel
-        this.ws = null;
         this.config = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 // Add your TURN servers here for production
             ]
         };
+    }
 
+    createPeerConnection() {
+        return new RTCPeerConnection(this.config);
+    }
+}
+
+class P2PChat {
+    constructor() {
+        this.peer_id = 'peer_' + Math.random().toString(36).substr(2, 9);
+        this.peers = new Map(); // peer_id -> RTCPeerConnection
+        this.dataChannels = new Map(); // peer_id -> RTCDataChannel
+        this.ws = null;
+        this.turnManager = new TURNManager();
+        
         this.initializeUI();
         this.connectToSignalingServer();
     }
@@ -78,8 +88,7 @@ class P2PChat {
     async connectToPeer(peerId) {
         if (this.peers.has(peerId)) return;
 
-        const peerConnection = new RTCPeerConnection(this.config);
-        this.setupPeerConnection(peerConnection, peerId);
+        const peerConnection = await this.createPeerConnection(peerId);
         this.peers.set(peerId, peerConnection);
 
         // Create data channel
@@ -100,9 +109,14 @@ class P2PChat {
         }));
     }
 
+    async createPeerConnection(peerId) {
+        const pc = this.turnManager.createPeerConnection();
+        this.setupPeerConnection(pc, peerId);
+        return pc;
+    }
+
     async handleOffer({ from, sdp }) {
-        const peerConnection = new RTCPeerConnection(this.config);
-        this.setupPeerConnection(peerConnection, from);
+        const peerConnection = await this.createPeerConnection(from);
         this.peers.set(from, peerConnection);
 
         // Handle data channel
