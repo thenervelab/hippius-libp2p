@@ -1,5 +1,5 @@
 use clap::Parser;
-use futures_util::{stream::Stream, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use libp2p::SwarmBuilder;
 use libp2p::Transport;
 use libp2p::{
@@ -12,7 +12,7 @@ use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent},
     tcp, yamux, Multiaddr, PeerId, Swarm,
 };
-use libp2p_webrtc::tokio::{certificate::Certificate, Transport as WebRTCTransport};
+use libp2p_webrtc::tokio::{certificate::Certificate};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -139,8 +139,7 @@ impl P2pServer {
 
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
-        let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert)
-            .with_config(libp2p_webrtc::WebRTCTransportConfig::new());
+        let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert);
         let webrtc_boxed = webrtc_transport
             .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse().unwrap())?
             .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
