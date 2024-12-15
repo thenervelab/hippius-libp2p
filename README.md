@@ -7,9 +7,9 @@ A robust peer-to-peer networking application built with Rust and LibP2P, support
 - **Multi-Transport Support**
   - TCP for direct connections
   - WebSocket for web-compatible connections
+  - WebRTC for browser-based peer connections
   - Automatic transport negotiation and protocol upgrading
   - Noise protocol for encrypted communications
-  - *(WebRTC support planned for future releases)*
 
 - **Peer Discovery**
   - MDNS for local network peer discovery
@@ -22,6 +22,13 @@ A robust peer-to-peer networking application built with Rust and LibP2P, support
   - Topic-based message broadcasting
   - Multiple topic subscriptions per node
   - JSON-based message serialization
+
+- **WebRTC Integration**
+  - Browser-to-browser P2P connections
+  - WebSocket signaling server for connection establishment
+  - TURN server support for NAT traversal
+  - Connection monitoring and statistics
+  - Automatic fallback to TURN relay
 
 ## Getting Started
 
