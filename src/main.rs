@@ -1,39 +1,25 @@
-use std::{
-    collections::HashMap,
-    error::Error as StdError,
-    sync::Arc,
-    time::Duration,
-};
-use std::hash::{Hash, Hasher, DefaultHasher};
-use futures_util::{StreamExt, SinkExt, stream::Stream};
+use clap::Parser;
+use futures_util::{stream::Stream, SinkExt, StreamExt};
+use libp2p::SwarmBuilder;
+use libp2p::Transport;
 use libp2p::{
-    core::{
-        transport::OrTransport,
-        upgrade,
-    },
+    core::muxing::StreamMuxerBox,
+    core::{transport::OrTransport, upgrade},
     gossipsub::{self},
     identity,
     mdns::{self, tokio::Behaviour as MdnsBehaviour},
     noise,
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp,
-    yamux,
-    Multiaddr,
-    PeerId,
-    Swarm,
-    core::muxing::StreamMuxerBox,
+    tcp, yamux, Multiaddr, PeerId, Swarm,
 };
-use libp2p::SwarmBuilder;
-use libp2p_webrtc::tokio::{
-    Transport as WebRTCTransport,
-    certificate::Certificate,
-};
+use libp2p_webrtc::tokio::{certificate::Certificate, Transport as WebRTCTransport};
+use rand::thread_rng;
+use serde::{Deserialize, Serialize};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{collections::HashMap, error::Error as StdError, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::Message;
 use tracing_subscriber::EnvFilter;
-use serde::{Deserialize, Serialize};
-use clap::Parser;
-use rand::thread_rng;
 
 // Custom result type for our application logic
 type AppResult<T> = std::result::Result<T, Box<dyn StdError + Send + Sync + 'static>>;
@@ -92,17 +78,21 @@ enum ServerMessage {
         from_peer: String,
         message: Vec<u8>,
         timestamp: u64,
-    }
+    },
 }
 
 impl P2pServer {
     async fn load_or_create_identity(is_bootnode: bool) -> AppResult<identity::Keypair> {
-        let key_file = if is_bootnode { "bootnode.key" } else { "node.key" };
-        
+        let key_file = if is_bootnode {
+            "bootnode.key"
+        } else {
+            "node.key"
+        };
+
         if let Ok(bytes) = std::fs::read(key_file) {
             return Ok(identity::Keypair::from_protobuf_encoding(&bytes)?);
         }
-        
+
         let keypair = identity::Keypair::generate_ed25519();
         std::fs::write(key_file, keypair.to_protobuf_encoding()?)?;
         Ok(keypair)
@@ -153,7 +143,8 @@ impl P2pServer {
         let webrtc_boxed = webrtc_transport
             .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse().unwrap())?
             .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
-            .boxed() as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
+            .boxed()
+            as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
 
         // Combine transports using OrTransport
         let transport = OrTransport::new(tcp_transport, webrtc_boxed);
@@ -181,18 +172,19 @@ impl P2pServer {
         };
 
         let encoded = serde_json::to_vec(&msg)?;
-        self.swarm.behaviour_mut().gossipsub.publish(
-            gossipsub::IdentTopic::new("global"),
-            encoded,
-        )?;
+        self.swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(gossipsub::IdentTopic::new("global"), encoded)?;
         Ok(())
     }
 
     async fn start(mut self) -> AppResult<()> {
         // Subscribe to the global topic
-        self.swarm.behaviour_mut().gossipsub.subscribe(
-            &gossipsub::IdentTopic::new("global")
-        )?;
+        self.swarm
+            .behaviour_mut()
+            .gossipsub
+            .subscribe(&gossipsub::IdentTopic::new("global"))?;
 
         // Connect to bootnode if specified
         let args = Args::parse();
@@ -257,14 +249,14 @@ impl P2pServer {
 async fn handle_connection(
     peer_map: PeerMap,
     raw_stream: tokio::net::TcpStream,
-    addr: std::net::SocketAddr
+    addr: std::net::SocketAddr,
 ) {
     println!("New WebSocket connection: {}", addr);
 
     let ws_stream = tokio_tungstenite::accept_async(raw_stream)
         .await
         .expect("Error during WebSocket handshake");
-    
+
     let (mut write, mut read) = ws_stream.split();
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -272,7 +264,10 @@ async fn handle_connection(
     println!("Peer {} connected", peer_id);
 
     // Add peer to the map
-    peer_map.write().await.insert(peer_id.clone(), sender.clone());
+    peer_map
+        .write()
+        .await
+        .insert(peer_id.clone(), sender.clone());
 
     // Handle incoming messages
     let read_future = {
@@ -300,9 +295,11 @@ async fn handle_connection(
                                         let join_msg = SignalingMessage::Join(JoinPayload {
                                             peer_id: peer_id.clone(),
                                         });
-                                        peer_tx.send(Message::Text(
-                                            serde_json::to_string(&join_msg).unwrap()
-                                        )).unwrap_or_default();
+                                        peer_tx
+                                            .send(Message::Text(
+                                                serde_json::to_string(&join_msg).unwrap(),
+                                            ))
+                                            .unwrap_or_default();
                                     }
                                 }
                             }
@@ -314,9 +311,11 @@ async fn handle_connection(
                                         from_peer: peer_id.clone(),
                                         to_peer,
                                     };
-                                    peer_tx.send(Message::Text(
-                                        serde_json::to_string(&offer_msg).unwrap()
-                                    )).unwrap_or_default();
+                                    peer_tx
+                                        .send(Message::Text(
+                                            serde_json::to_string(&offer_msg).unwrap(),
+                                        ))
+                                        .unwrap_or_default();
                                 }
                             }
                             SignalingMessage::Answer { sdp, to_peer, .. } => {
@@ -327,12 +326,16 @@ async fn handle_connection(
                                         from_peer: peer_id.clone(),
                                         to_peer,
                                     };
-                                    peer_tx.send(Message::Text(
-                                        serde_json::to_string(&answer_msg).unwrap()
-                                    )).unwrap_or_default();
+                                    peer_tx
+                                        .send(Message::Text(
+                                            serde_json::to_string(&answer_msg).unwrap(),
+                                        ))
+                                        .unwrap_or_default();
                                 }
                             }
-                            SignalingMessage::IceCandidate { candidate, to_peer, .. } => {
+                            SignalingMessage::IceCandidate {
+                                candidate, to_peer, ..
+                            } => {
                                 // Forward ICE candidate to specific peer
                                 if let Some(peer_tx) = peer_map.read().await.get(&to_peer) {
                                     let ice_msg = SignalingMessage::IceCandidate {
@@ -340,9 +343,11 @@ async fn handle_connection(
                                         from_peer: peer_id.clone(),
                                         to_peer,
                                     };
-                                    peer_tx.send(Message::Text(
-                                        serde_json::to_string(&ice_msg).unwrap()
-                                    )).unwrap_or_default();
+                                    peer_tx
+                                        .send(Message::Text(
+                                            serde_json::to_string(&ice_msg).unwrap(),
+                                        ))
+                                        .unwrap_or_default();
                                 }
                             }
                         }
@@ -386,7 +391,9 @@ async fn main() -> AppResult<()> {
 
     // Start WebSocket server
     let addr = format!("0.0.0.0:{}", args.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| Box::new(e) as Box<dyn StdError + Send + Sync>)?;
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn StdError + Send + Sync>)?;
     println!("WebSocket server listening on: {}", addr);
 
     let server_handle = tokio::spawn(async move {
