@@ -151,13 +151,14 @@ impl P2pServer {
 
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
-        let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
-            .into_stream()
-            .map(|(peer_id, conn)| (peer_id, StreamMuxerBox::new(conn)))
+        let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert);
+        let webrtc_boxed = webrtc_transport
+            .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse().unwrap())?
+            .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
             .boxed() as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
 
         // Combine transports using OrTransport
-        let transport = OrTransport::new(tcp_transport, webrtc_transport);
+        let transport = OrTransport::new(tcp_transport, webrtc_boxed);
 
         let mut swarm = SwarmBuilder::with_existing_identity(local_key.clone())
             .with_tokio()
@@ -165,9 +166,8 @@ impl P2pServer {
             .with_behaviour(|_| Ok(behaviour))?
             .build();
 
-        // Listen on both TCP and WebRTC
+        // Listen on TCP
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
-        swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse()?)?;
 
         Ok(Self { swarm, peer_map })
     }
