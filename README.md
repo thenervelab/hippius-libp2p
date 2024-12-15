@@ -9,6 +9,7 @@ A robust peer-to-peer networking application built with Rust and LibP2P, support
   - WebSocket for web-compatible connections
   - Automatic transport negotiation and protocol upgrading
   - Noise protocol for encrypted communications
+  - *(WebRTC support planned for future releases)*
 
 - **Peer Discovery**
   - MDNS for local network peer discovery
@@ -45,15 +46,340 @@ A robust peer-to-peer networking application built with Rust and LibP2P, support
 
 ### Running
 
-1. Start a bootnode (first node in the network):
+There are several ways to run the application:
+
+1. Start everything (signaling server, web server, and bootnode) at once:
    ```bash
-   cargo run --release -- --bootnode
+   cargo run -- --mode all
+   ```
+   This starts:
+   - 🌐 Web client server at http://localhost:8080
+   - 📡 WebRTC signaling server at ws://localhost:8000
+   - 🔄 P2P bootnode at /ip4/127.0.0.1/tcp/4001
+
+   The application will display:
+   - URLs for accessing each server
+   - The bootnode's peer ID (important for manual connections)
+   - Each node's unique peer ID when started
+
+   Then:
+   1. Open http://localhost:8080 in multiple browser windows
+   2. Watch as peers automatically discover each other
+   3. Click on peers to establish WebRTC connections
+   4. Start chatting peer-to-peer!
+
+2. Start just the signaling and web servers:
+   ```bash
+   cargo run -- --mode signaling
    ```
 
-2. Start regular nodes (in separate terminals):
+3. Start a bootnode only:
    ```bash
-   cargo run --release
+   cargo run -- --mode bootnode
    ```
+
+4. Start a regular node:
+   ```bash
+   # Start a regular node with web and signaling servers
+   cargo run -- --mode node
+   ```
+   This starts:
+   - A regular P2P node
+   - Web client server (http://localhost:8080)
+   - Signaling server (ws://localhost:8000)
+
+You can customize the ports using:
+- `--web-port <PORT>` for the web server
+- `--signaling-port <PORT>` for the signaling server
+- `--bootnode-port <PORT>` for the bootnode
+
+Example with custom ports:
+```bash
+cargo run -- --mode all --web-port 3000 --signaling-port 3001 --bootnode-port 4001
+```
+
+## Quick Start
+
+### 1. All-in-One Setup (Recommended for Testing)
+
+Start everything with a single command:
+```bash
+cargo run -- --mode all
+```
+
+This starts:
+- 🌐 Web client server at http://localhost:8080
+- 📡 WebRTC signaling server at ws://localhost:8000
+- 🔄 P2P bootnode at /ip4/127.0.0.1/tcp/4001
+
+The application will display:
+- URLs for accessing each server
+- The bootnode's peer ID (important for manual connections)
+- Each node's unique peer ID when started
+
+Then:
+1. Open http://localhost:8080 in multiple browser windows
+2. Watch as peers automatically discover each other
+3. Click on peers to establish WebRTC connections
+4. Start chatting peer-to-peer!
+
+### 2. Distributed Setup (Production-like Environment)
+
+1. Start infrastructure servers:
+   ```bash
+   # Terminal 1: Start signaling and web servers
+   cargo run -- --mode signaling
+   ```
+
+2. Start a bootnode:
+   ```bash
+   # Terminal 2: Start bootnode for peer discovery
+   cargo run -- --mode bootnode
+   ```
+
+3. Start regular nodes:
+   ```bash
+   # Terminal 3+: Start as many nodes as you want
+   cargo run -- --mode node
+   ```
+
+### 3. Custom Configuration
+
+Customize any port:
+```bash
+cargo run -- --mode all \
+  --web-port 3000 \        # Web client
+  --signaling-port 3001 \  # WebRTC signaling
+  --bootnode-port 4001     # P2P bootnode
+```
+
+### Common Scenarios
+
+1. Development Testing:
+   ```bash
+   # Quick start everything on default ports
+   cargo run -- --mode all
+   ```
+
+2. Running a Signaling Server:
+   ```bash
+   # Just the infrastructure (no P2P node)
+   cargo run -- --mode signaling
+   ```
+
+3. Network Bootstrap:
+   ```bash
+   # Start a bootnode for the P2P network
+   cargo run -- --mode bootnode
+   ```
+
+4. Regular Node:
+   ```bash
+   # Start a regular node with web and signaling servers
+   cargo run -- --mode node
+   ```
+   This starts:
+   - A regular P2P node
+   - Web client server (http://localhost:8080)
+   - Signaling server (ws://localhost:8000)
+
+### Example: Setting Up a Local Test Network
+
+1. Start the bootnode:
+   ```bash
+   # Terminal 1: Bootnode
+   cargo run -- --mode bootnode
+   ```
+
+2. Start additional nodes (each in a new terminal):
+   ```bash
+   # Terminal 2+: Additional nodes
+   cargo run -- --mode node
+   ```
+   Each node will run its own:
+   - Web client (on port 8080)
+   - Signaling server (on port 8000)
+   - P2P node
+
+3. Open http://localhost:8080 in your browser for each node
+
+Now you have:
+- ✅ WebRTC-enabled web clients
+- ✅ P2P network with bootnode
+- ✅ Automatic peer discovery
+- ✅ Direct peer-to-peer messaging
+
+### Network Information
+
+When starting nodes, the application displays:
+
+1. For bootnodes:
+   ```
+   Bootnode: /ip4/127.0.0.1/tcp/4001
+   Bootnode PeerID: [unique identifier]
+   ```
+
+2. For regular nodes:
+   ```
+   Node PeerID: [unique identifier]
+   ```
+
+These peer IDs are important for:
+- Identifying specific nodes in the network
+- Debugging connection issues
+- Manual peer connections
+- Verifying successful peer discovery
+
+### Troubleshooting
+
+1. If web client shows "Disconnected":
+   - Ensure signaling server is running
+   - Check if WebSocket port (default: 8000) is accessible
+
+2. If peers don't connect:
+   - Verify bootnode is running
+   - Check if TCP port (default: 4001) is accessible
+   - Ensure no firewall is blocking connections
+
+3. If WebRTC fails:
+   - Check browser console for errors
+   - Ensure STUN/TURN servers are accessible
+   - Verify both peers can reach the signaling server
+
+## Web Client
+
+The project includes a web-based client that demonstrates WebRTC peer-to-peer connections. The web client features:
+
+- Real-time peer-to-peer messaging
+- Automatic peer discovery
+- Connection status monitoring
+- Manual peer connection option
+- Clean and intuitive UI
+
+### Using the Web Client
+
+1. Open the web client in multiple browser windows
+2. Each client gets a unique peer ID
+3. Click on a peer in the list to connect
+4. Or enter a peer ID manually and click "Connect"
+5. Once connected, you can send messages between peers
+6. Messages are sent directly peer-to-peer using WebRTC data channels
+
+### Features
+
+- **Real-time Messaging**: Send and receive messages instantly
+- **Peer Management**: See available peers and their connection status
+- **Data Channels**: Uses WebRTC data channels for direct peer-to-peer communication
+- **Connection Status**: Monitor connection state in real-time
+- **Manual Connection**: Connect to peers by ID if they're not automatically discovered
+
+### Technical Details
+
+The web client is built using:
+- Pure JavaScript (no frameworks)
+- WebRTC API for peer connections
+- WebSocket for signaling
+- Modern CSS Grid and Flexbox for layout
+
+### Directory Structure
+
+```
+web/
+├── index.html     # Main HTML file
+├── style.css      # Styles and layout
+└── webrtc.js      # WebRTC implementation
+```
+
+## WebRTC Signaling Server
+
+The project includes a WebRTC signaling server to facilitate peer-to-peer WebRTC connections. The signaling server handles:
+
+- Peer registration and discovery
+- SDP offer/answer exchange
+- ICE candidate exchange
+- Connection state management
+
+### WebSocket API
+
+The signaling server exposes a WebSocket endpoint at `/signal` that accepts the following message types:
+
+```typescript
+// Register as a peer
+{
+  "type": "Register",
+  "payload": {
+    "peer_id": string
+  }
+}
+
+// Send WebRTC offer
+{
+  "type": "Offer",
+  "payload": {
+    "from": string,
+    "to": string,
+    "sdp": string
+  }
+}
+
+// Send WebRTC answer
+{
+  "type": "Answer",
+  "payload": {
+    "from": string,
+    "to": string,
+    "sdp": string
+  }
+}
+
+// Exchange ICE candidates
+{
+  "type": "IceCandidate",
+  "payload": {
+    "from": string,
+    "to": string,
+    "candidate": string
+  }
+}
+```
+
+### Example WebRTC Client Connection
+
+```javascript
+const ws = new WebSocket('ws://localhost:8000/signal');
+const peer_id = 'peer_' + Math.random().toString(36).substr(2, 9);
+
+// Register with the signaling server
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: 'Register',
+    payload: { peer_id }
+  }));
+};
+
+// Handle incoming signaling messages
+ws.onmessage = async (event) => {
+  const message = JSON.parse(event.data);
+  switch (message.type) {
+    case 'Offer':
+      // Handle incoming WebRTC offer
+      break;
+    case 'Answer':
+      // Handle incoming WebRTC answer
+      break;
+    case 'IceCandidate':
+      // Handle incoming ICE candidate
+      break;
+  }
+};
+```
+
+### Security Considerations
+
+- The signaling server should be deployed with TLS in production
+- Implement authentication for peer registration
+- Use TURN servers for NAT traversal in restricted networks
+- Consider rate limiting for DoS protection
 
 ## Usage Examples
 

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hippius P2P Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="connection-status">
+            <div id="status" class="status">Disconnected</div>
+            <div id="peer-id" class="peer-id"></div>
+        </div>
+
+        <div class="peers-container">
+            <h3>Available Peers</h3>
+            <div id="peers-list" class="peers-list"></div>
+            <input type="text" id="manual-peer-id" placeholder="Enter peer ID manually">
+            <button id="connect-manual">Connect</button>
+        </div>
+
+        <div class="chat-container">
+            <div id="messages" class="messages"></div>
+            <div class="input-container">
+                <input type="text" id="message-input" placeholder="Type your message...">
+                <button id="send-message">Send</button>
+            </div>
+        </div>
+
+        <div class="data-channels">
+            <h3>Data Channels</h3>
+            <div id="channels-list"></div>
+        </div>
+    </div>
+    <script src="webrtc.js"></script>
+</body>
+</html>

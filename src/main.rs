@@ -258,6 +258,35 @@ impl P2pServer {
             }
         }
     }
+
+    fn peer_id(&self) -> PeerId {
+        *self.swarm.local_peer_id()
+    }
+}
+
+mod signaling;
+mod web_server;
+
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Run mode: 'all' for all servers, 'bootnode' for bootnode only, 'node' for regular node, 'signaling' for signaling+web servers
+    #[arg(long, default_value = "node")]
+    mode: String,
+
+    /// Port for signaling server
+    #[arg(long, default_value = "8000")]
+    signaling_port: u16,
+
+    /// Port for web server
+    #[arg(long, default_value = "8080")]
+    web_port: u16,
+
+    /// Port for bootnode
+    #[arg(long, default_value = "4001")]
+    bootnode_port: u16,
 }
 
 #[tokio::main]
@@ -266,11 +295,64 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let peer_map = Arc::new(RwLock::new(HashMap::new()));
+    let args = Args::parse();
     
-    // Start the P2P server
-    let server = P2pServer::new(peer_map.clone(), false).await?;
-    server.start().await?;
+    match args.mode.as_str() {
+        "all" => {
+            println!("Starting all servers...");
+            println!("Web server: http://localhost:{}", args.web_port);
+            println!("Signaling server: ws://localhost:{}", args.signaling_port);
+            
+            // Start web server, signaling server, and bootnode
+            let peer_map = Arc::new(RwLock::new(HashMap::new()));
+            let bootnode = P2pServer::new(peer_map.clone(), true).await?;
+            println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
+            println!("Bootnode PeerID: {}", bootnode.peer_id());
+            
+            tokio::join!(
+                web_server::start_web_server(args.web_port),
+                signaling::start_signaling_server(args.signaling_port),
+                bootnode.start()
+            );
+        }
+        "signaling" => {
+            println!("Starting signaling and web servers...");
+            println!("Web server: http://localhost:{}", args.web_port);
+            println!("Signaling server: ws://localhost:{}", args.signaling_port);
+            
+            tokio::join!(
+                web_server::start_web_server(args.web_port),
+                signaling::start_signaling_server(args.signaling_port)
+            );
+        }
+        "bootnode" => {
+            println!("Starting bootnode...");
+            let peer_map = Arc::new(RwLock::new(HashMap::new()));
+            let server = P2pServer::new(peer_map.clone(), true).await?;
+            println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
+            println!("Bootnode PeerID: {}", server.peer_id());
+            server.start().await?;
+        }
+        "node" => {
+            println!("Starting regular node with signaling and web servers...");
+            println!("Web server: http://localhost:{}", args.web_port);
+            println!("Signaling server: ws://localhost:{}", args.signaling_port);
+            
+            let peer_map = Arc::new(RwLock::new(HashMap::new()));
+            let server = P2pServer::new(peer_map.clone(), false).await?;
+            println!("Node PeerID: {}", server.peer_id());
+            
+            tokio::join!(
+                web_server::start_web_server(args.web_port),
+                signaling::start_signaling_server(args.signaling_port),
+                server.start()
+            );
+        }
+        _ => {
+            println!("Invalid mode. Available modes: all, signaling, bootnode, node");
+            std::process::exit(1);
+        }
+    }
 
     Ok(())
 }

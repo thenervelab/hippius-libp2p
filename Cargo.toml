@@ -20,19 +20,19 @@ libp2p = { version = "0.53", features = [
     "kad",
     "dns",
     "websocket",
-    "websocket-websys",
 ] }
+futures-util = "0.3"
+tokio = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.35", features = ["full"] }
-tokio-tungstenite = "0.20"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.6", features = ["v4"] }
+warp = "0.3"
+rand = "0.8"
 base64 = "0.21"
-futures-util = "0.3"
 once_cell = "1.19"
 clap = { version = "4.4", features = ["derive"] }
 libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
-rand = "0.8"
+uuid = { version = "1.6", features = ["v4"] }
 # Remove explicit libp2p-core dependency as it's included in libp2p
