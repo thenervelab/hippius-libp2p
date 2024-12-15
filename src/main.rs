@@ -3,7 +3,9 @@ use std::{
     error::Error as StdError,
     sync::Arc,
     time::Duration,
+    io,
 };
+use futures::future;
 use std::hash::{Hash, Hasher, DefaultHasher};
 use futures_util::{StreamExt, SinkExt};
 use either::Either;
@@ -153,7 +155,10 @@ impl P2pServer {
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
-            .map(|(peer_id, connection)| (peer_id, StreamMuxerBox::new(connection)))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            .and_then(|(peer_id, connection)| {
+                future::ok((peer_id, StreamMuxerBox::new(connection)))
+            })
             .boxed();
 
         // Combine transports using OrTransport
