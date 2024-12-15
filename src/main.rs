@@ -20,8 +20,6 @@ use libp2p::{
     yamux,
     Multiaddr,
     PeerId,
-    Transport as _,
-    core::transport::Transport,
     Swarm,
     core::muxing::StreamMuxerBox,
 };
