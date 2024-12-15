@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Y.js Collaborative Editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/yjs@13.6.8/dist/yjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/y-webrtc@10.2.5/dist/y-webrtc.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/y-codemirror@3.0.1/dist/y-codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        .editor-container {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 3px;
+        }
+        .CodeMirror {
+            height: 400px;
+            border: 1px solid #ddd;
+        }
+        .awareness-list {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+        }
+        .user-cursor {
+            padding: 2px 5px;
+            margin: 2px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Y.js Collaborative Editor</h1>
+    <div class="container">
+        <div class="editor-container">
+            <h2>Collaborative Text Editor</h2>
+            <div id="editor"></div>
+            <div class="status" id="connection-status">Connecting...</div>
+            <div class="awareness-list" id="awareness-list">Users online: </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Yjs document
+        const ydoc = new Y.Doc();
+        const ytext = ydoc.getText('codemirror');
+        
+        // Create a random color for this user
+        const userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        
+        // Initialize CodeMirror
+        const editor = CodeMirror(document.getElementById('editor'), {
+            mode: 'text/plain',
+            lineNumbers: true,
+            theme: 'default',
+            lineWrapping: true
+        });
+
+        // Create custom signaling provider
+        class CustomSignalingProvider {
+            constructor(ydoc) {
+                this.ydoc = ydoc;
+                this.ws = null;
+                this.peers = new Set();
+                this.connect();
+            }
+
+            connect() {
+                this.ws = new WebSocket('ws://127.0.0.1:8081');
+                
+                this.ws.onopen = () => {
+                    updateStatus('Connected to signaling server');
+                    // Send join message
+                    this.ws.send(JSON.stringify({ 
+                        type: 'Join',
+                        payload: {
+                            userId: ydoc.clientID,
+                            userColor: userColor
+                        }
+                    }));
+                };
+
+                this.ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    this.handleSignalingMessage(message);
+                };
+
+                this.ws.onerror = (error) => {
+                    updateStatus('Signaling server error: ' + error.message);
+                };
+
+                this.ws.onclose = () => {
+                    updateStatus('Disconnected from signaling server');
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(() => this.connect(), 5000);
+                };
+            }
+
+            send(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+
+            async handleSignalingMessage(message) {
+                switch (message.type) {
+                    case 'Join':
+                        // New peer joined, create WebRTC connection
+                        if (message.payload.userId !== this.ydoc.clientID) {
+                            this.peers.add(message.payload.userId);
+                            updateAwarenessList();
+                        }
+                        break;
+                    case 'SyncUpdate':
+                        // Apply incoming Yjs update
+                        Y.applyUpdate(this.ydoc, new Uint8Array(message.payload.update));
+                        break;
+                }
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                }
+            }
+        }
+
+        // Initialize the custom signaling provider
+        const provider = new CustomSignalingProvider(ydoc);
+
+        // Bind CodeMirror to Yjs
+        const binding = new CodemirrorBinding(ytext, editor, provider.awareness);
+
+        // Listen for Yjs updates
+        ydoc.on('update', (update) => {
+            // Broadcast the update to all peers through the signaling server
+            provider.send({
+                type: 'SyncUpdate',
+                payload: {
+                    update: Array.from(update)
+                }
+            });
+        });
+
+        function updateStatus(message) {
+            document.getElementById('connection-status').textContent = message;
+        }
+
+        function updateAwarenessList() {
+            const list = document.getElementById('awareness-list');
+            list.innerHTML = 'Users online: ' + provider.peers.size;
+            provider.peers.forEach(peerId => {
+                const userElement = document.createElement('span');
+                userElement.className = 'user-cursor';
+                userElement.style.backgroundColor = userColor;
+                userElement.textContent = `User ${peerId}`;
+                list.appendChild(userElement);
+            });
+        }
+
+        // Clean up on page unload
+        window.addEventListener('unload', () => {
+            provider.disconnect();
+            ydoc.destroy();
+        });
+    </script>
+</body>
+</html>

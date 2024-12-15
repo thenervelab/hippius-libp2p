@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .peer {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        video {
+            width: 100%;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC Test Client</h1>
+    <div class="container">
+        <div class="peer" id="peer1">
+            <h2>Peer 1</h2>
+            <video id="video1" autoplay playsinline></video>
+            <div class="status" id="status1"></div>
+            <button onclick="startPeer(1)">Start Peer 1</button>
+        </div>
+        <div class="peer" id="peer2">
+            <h2>Peer 2</h2>
+            <video id="video2" autoplay playsinline></video>
+            <div class="status" id="status2"></div>
+            <button onclick="startPeer(2)">Start Peer 2</button>
+        </div>
+    </div>
+
+    <script>
+        const signaling = {
+            ws: null,
+            connect: function(peerId) {
+                this.ws = new WebSocket('ws://127.0.0.1:8081');
+                
+                this.ws.onopen = () => {
+                    updateStatus(peerId, 'Connected to signaling server');
+                    // Send join message
+                    this.ws.send(JSON.stringify({ type: 'Join' }));
+                };
+
+                this.ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    handleSignalingMessage(peerId, message);
+                };
+
+                this.ws.onerror = (error) => {
+                    updateStatus(peerId, 'Signaling server error: ' + error.message);
+                };
+
+                this.ws.onclose = () => {
+                    updateStatus(peerId, 'Disconnected from signaling server');
+                };
+            },
+            send: function(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+        };
+
+        const peerConnections = {};
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        };
+
+        async function startPeer(peerId) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById(`video${peerId}`).srcObject = stream;
+
+                peerConnections[peerId] = new RTCPeerConnection(configuration);
+                const pc = peerConnections[peerId];
+
+                stream.getTracks().forEach(track => {
+                    pc.addTrack(track, stream);
+                });
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        signaling.send({
+                            type: 'Ice',
+                            payload: { candidate: event.candidate.toJSON() }
+                        });
+                    }
+                };
+
+                pc.ontrack = (event) => {
+                    const remoteVideo = document.getElementById(`video${3-peerId}`);
+                    if (remoteVideo.srcObject !== event.streams[0]) {
+                        remoteVideo.srcObject = event.streams[0];
+                    }
+                };
+
+                signaling.connect(peerId);
+
+                if (peerId === 1) {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    signaling.send({
+                        type: 'Offer',
+                        payload: { sdp: offer.sdp }
+                    });
+                }
+
+                updateStatus(peerId, 'Peer started');
+            } catch (err) {
+                updateStatus(peerId, 'Error starting peer: ' + err.message);
+            }
+        }
+
+        async function handleSignalingMessage(peerId, message) {
+            const pc = peerConnections[peerId];
+            if (!pc) return;
+
+            try {
+                switch (message.type) {
+                    case 'Offer':
+                        await pc.setRemoteDescription(new RTCSessionDescription({
+                            type: 'offer',
+                            sdp: message.payload.sdp
+                        }));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        signaling.send({
+                            type: 'Answer',
+                            payload: { sdp: answer.sdp }
+                        });
+                        break;
+
+                    case 'Answer':
+                        await pc.setRemoteDescription(new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: message.payload.sdp
+                        }));
+                        break;
+
+                    case 'Ice':
+                        if (message.payload.candidate) {
+                            await pc.addIceCandidate(new RTCIceCandidate(message.payload.candidate));
+                        }
+                        break;
+                }
+            } catch (err) {
+                updateStatus(peerId, 'Error handling message: ' + err.message);
+            }
+        }
+
+        function updateStatus(peerId, message) {
+            const status = document.getElementById(`status${peerId}`);
+            status.textContent = message;
+        }
+    </script>
+</body>
+</html>
