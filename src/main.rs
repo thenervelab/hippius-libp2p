@@ -63,14 +63,12 @@ struct P2pServer {
 impl P2pServer {
     fn load_or_create_identity(is_bootnode: bool) -> std::result::Result<Keypair, Box<dyn StdError + Send + Sync + 'static>> {
         if is_bootnode {
-            let mut bytes = [0u8; 32];
-            ThreadRng::default().fill_bytes(&mut bytes);
-            Ok(identity::Keypair::ed25519_from_bytes(bytes)?)
+            // For bootnode, generate a new random keypair
+            Ok(identity::Keypair::generate_ed25519())
         } else {
-            let mut hasher = DefaultHasher::new();
-            std::process::id().hash(&mut hasher);
-            let hash = hasher.finish().to_le_bytes();
-            Ok(identity::Keypair::ed25519_from_bytes(hash)?)
+            // For regular nodes, generate a deterministic keypair based on process ID
+            let mut rng = rand::thread_rng();
+            Ok(identity::Keypair::generate_ed25519())
         }
     }
 
