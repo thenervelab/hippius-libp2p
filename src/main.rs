@@ -152,6 +152,7 @@ impl P2pServer {
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
+            .into_stream()
             .map(|(peer_id, conn)| (peer_id, StreamMuxerBox::new(conn)))
             .boxed() as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
 
