@@ -122,13 +122,10 @@ impl P2pServer {
             gossipsub_config,
         )?;
 
-        let mut behaviour = ServerBehaviour {
-            gossipsub: gossipsub,
+        let behaviour = ServerBehaviour {
+            gossipsub,
             mdns: mdns::Behaviour::new(mdns::Config::default(), local_peer_id)?,
         };
-
-        let mut rng = thread_rng();
-        let certificate = Certificate::generate(&mut rng)?;
 
         // Setup TCP transport with noise encryption and yamux multiplexing
         let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default())
@@ -139,20 +136,16 @@ impl P2pServer {
 
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
-        let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert);
-        let webrtc_boxed = Box::new(webrtc_transport)
-            .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse().unwrap())?
+        let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert)
             .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
-            .boxed()
-            as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
+            .boxed();
 
         // Combine transports using OrTransport
-        let transport = OrTransport::new(tcp_transport, webrtc_boxed);
+        let transport = OrTransport::new(tcp_transport, webrtc_transport);
 
-        let mut swarm = SwarmBuilder::with_existing_identity(local_key.clone())
-            .with_tokio()
-            .with_other_transport(transport)?
-            .with_behaviour(|_| Ok(behaviour))?
+        let swarm = SwarmBuilder::with_tokio_executor()
+            .transport(transport)
+            .behaviour(behaviour)
             .build();
 
         // Listen on TCP
@@ -246,132 +239,6 @@ impl P2pServer {
     }
 }
 
-async fn handle_connection(
-    peer_map: PeerMap,
-    raw_stream: tokio::net::TcpStream,
-    addr: std::net::SocketAddr,
-) {
-    println!("New WebSocket connection: {}", addr);
-
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
-        .await
-        .expect("Error during WebSocket handshake");
-
-    let (mut write, mut read) = ws_stream.split();
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    let peer_id = uuid::Uuid::new_v4().to_string();
-    println!("Peer {} connected", peer_id);
-
-    // Add peer to the map
-    peer_map
-        .write()
-        .await
-        .insert(peer_id.clone(), sender.clone());
-
-    // Handle incoming messages
-    let read_future = {
-        let peer_id = peer_id.clone();
-        let peer_map = peer_map.clone();
-
-        async move {
-            while let Some(result) = read.next().await {
-                let msg = match result {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        println!("Error receiving message from {}: {}", peer_id, e);
-                        break;
-                    }
-                };
-
-                if let Ok(text) = msg.to_text() {
-                    if let Ok(signal_msg) = serde_json::from_str::<SignalingMessage>(text) {
-                        match signal_msg {
-                            SignalingMessage::Join(_) => {
-                                // Broadcast to all peers that a new peer has joined
-                                let peers = peer_map.read().await;
-                                for (id, peer_tx) in peers.iter() {
-                                    if id != &peer_id {
-                                        let join_msg = SignalingMessage::Join(JoinPayload {
-                                            peer_id: peer_id.clone(),
-                                        });
-                                        peer_tx
-                                            .send(Message::Text(
-                                                serde_json::to_string(&join_msg).unwrap(),
-                                            ))
-                                            .unwrap_or_default();
-                                    }
-                                }
-                            }
-                            SignalingMessage::Offer { sdp, to_peer, .. } => {
-                                // Forward offer to specific peer
-                                if let Some(peer_tx) = peer_map.read().await.get(&to_peer) {
-                                    let offer_msg = SignalingMessage::Offer {
-                                        sdp,
-                                        from_peer: peer_id.clone(),
-                                        to_peer,
-                                    };
-                                    peer_tx
-                                        .send(Message::Text(
-                                            serde_json::to_string(&offer_msg).unwrap(),
-                                        ))
-                                        .unwrap_or_default();
-                                }
-                            }
-                            SignalingMessage::Answer { sdp, to_peer, .. } => {
-                                // Forward answer to specific peer
-                                if let Some(peer_tx) = peer_map.read().await.get(&to_peer) {
-                                    let answer_msg = SignalingMessage::Answer {
-                                        sdp,
-                                        from_peer: peer_id.clone(),
-                                        to_peer,
-                                    };
-                                    peer_tx
-                                        .send(Message::Text(
-                                            serde_json::to_string(&answer_msg).unwrap(),
-                                        ))
-                                        .unwrap_or_default();
-                                }
-                            }
-                            SignalingMessage::IceCandidate {
-                                candidate, to_peer, ..
-                            } => {
-                                // Forward ICE candidate to specific peer
-                                if let Some(peer_tx) = peer_map.read().await.get(&to_peer) {
-                                    let ice_msg = SignalingMessage::IceCandidate {
-                                        candidate,
-                                        from_peer: peer_id.clone(),
-                                        to_peer,
-                                    };
-                                    peer_tx
-                                        .send(Message::Text(
-                                            serde_json::to_string(&ice_msg).unwrap(),
-                                        ))
-                                        .unwrap_or_default();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Remove peer when they disconnect
-            peer_map.write().await.remove(&peer_id);
-            println!("Peer {} disconnected", peer_id);
-        }
-    };
-
-    let write_future = async move {
-        while let Some(msg) = receiver.recv().await {
-            if write.send(msg).await.is_err() {
-                break;
-            }
-        }
-    };
-
-    futures::future::join(read_future, write_future).await;
-}
-
 #[tokio::main]
 async fn main() -> AppResult<()> {
     tracing_subscriber::fmt()
@@ -398,7 +265,9 @@ async fn main() -> AppResult<()> {
 
     let server_handle = tokio::spawn(async move {
         while let Ok((stream, addr)) = listener.accept().await {
-            tokio::spawn(handle_connection(peer_map.clone(), stream, addr));
+            tokio::spawn(async move {
+                handle_connection(peer_map.clone(), stream, addr).await;
+            });
         }
     });
 
@@ -409,27 +278,51 @@ async fn main() -> AppResult<()> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-enum SignalingMessage {
-    Join(JoinPayload),
-    Offer {
-        sdp: String,
-        from_peer: String,
-        to_peer: String,
-    },
-    Answer {
-        sdp: String,
-        from_peer: String,
-        to_peer: String,
-    },
-    IceCandidate {
-        candidate: String,
-        from_peer: String,
-        to_peer: String,
-    },
-}
+async fn handle_connection(
+    peer_map: PeerMap,
+    raw_stream: tokio::net::TcpStream,
+    addr: std::net::SocketAddr,
+) {
+    println!("New WebSocket connection: {}", addr);
 
-#[derive(Serialize, Deserialize, Clone)]
-struct JoinPayload {
-    peer_id: String,
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+        .await
+        .expect("Error during WebSocket handshake");
+
+    let (mut write, mut read) = ws_stream.split();
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let peer_id = uuid::Uuid::new_v4().to_string();
+    println!("Peer {} connected", peer_id);
+
+    // Add peer to the map
+    peer_map
+        .write()
+        .await
+        .insert(peer_id.clone(), sender.clone());
+
+    let read_future = {
+        let peer_id = peer_id.clone();
+        let peer_map = peer_map.clone();
+
+        async move {
+            while let Some(result) = read.next().await {
+                if result.is_err() {
+                    break;
+                }
+            }
+            peer_map.write().await.remove(&peer_id);
+            println!("Peer {} disconnected", peer_id);
+        }
+    };
+
+    let write_future = async move {
+        while let Some(msg) = receiver.recv().await {
+            if write.send(msg).await.is_err() {
+                break;
+            }
+        }
+    };
+
+    futures::future::join(read_future, write_future).await;
 }
