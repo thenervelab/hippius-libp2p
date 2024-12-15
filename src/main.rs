@@ -8,7 +8,7 @@ use std::hash::{Hash, Hasher, DefaultHasher};
 use futures_util::{StreamExt, SinkExt, stream::Stream};
 use libp2p::{
     core::{
-        transport::OrTransport,
+        transport::{OrTransport, Transport},
         upgrade,
     },
     gossipsub::{self},
