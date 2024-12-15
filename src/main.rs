@@ -3,14 +3,11 @@ use std::{
     error::Error as StdError,
     sync::Arc,
     time::Duration,
-    io,
 };
-use futures::future;
 use std::hash::{Hash, Hasher, DefaultHasher};
 use futures_util::{StreamExt, SinkExt};
 use libp2p::{
     core::{
-        muxing::StreamMuxerBox,
         transport::OrTransport,
         upgrade,
     },
@@ -23,7 +20,8 @@ use libp2p::{
     yamux,
     Multiaddr,
     PeerId,
-    Transport,
+    Transport as _,
+    core::transport::Transport,
     Swarm,
 };
 use libp2p::SwarmBuilder;
@@ -153,6 +151,7 @@ impl P2pServer {
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
+            .map(|(peer_id, conn)| (peer_id, StreamMuxerBox::new(conn)))
             .boxed();
 
         // Combine transports using OrTransport
