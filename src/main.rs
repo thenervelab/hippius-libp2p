@@ -143,25 +143,21 @@ impl P2pServer {
         let mut rng = thread_rng();
         let certificate = Certificate::generate(&mut rng)?;
 
-        // Combine transports using OrTransport
         // Setup TCP transport with noise encryption and yamux multiplexing
         let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default())
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::Config::new(&local_key).unwrap())
-            .multiplex(yamux::Config::default());
+            .multiplex(yamux::Config::default())
+            .boxed();
 
-        // Create the WebRTC transport
+        // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
-        let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert);
+        let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
+            .map(|(peer_id, connection)| (peer_id, StreamMuxerBox::new(connection)))
+            .boxed();
 
-        // Combine transports
-        let transport = OrTransport::new(tcp_transport, webrtc_transport)
-            .map(|either_output, _| {
-                match either_output {
-                    Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-                    Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-                }
-            });
+        // Combine transports using OrTransport
+        let transport = OrTransport::new(tcp_transport, webrtc_transport);
 
         let mut swarm = SwarmBuilder::with_existing_identity(local_key.clone())
             .with_tokio()
