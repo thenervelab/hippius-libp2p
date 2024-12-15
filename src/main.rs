@@ -153,7 +153,7 @@ impl P2pServer {
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = WebRTCTransport::new(local_key.clone(), cert)
             .map(|(peer_id, conn)| (peer_id, StreamMuxerBox::new(conn)))
-            .boxed() as libp2p::core::transport::BoxedTransport<((), libp2p::core::muxing::StreamMuxerBox)>;
+            .boxed() as libp2p::core::transport::Boxed<((), libp2p::core::muxing::StreamMuxerBox)>;
 
         // Combine transports using OrTransport
         let transport = OrTransport::new(tcp_transport, webrtc_transport);
