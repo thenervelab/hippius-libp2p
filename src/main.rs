@@ -137,13 +137,14 @@ impl P2pServer {
         // Create and configure WebRTC transport
         let cert = Certificate::generate(&mut thread_rng())?;
         let webrtc_transport = libp2p_webrtc::tokio::Transport::new(local_key.clone(), cert)
+            .listen_on("/ip4/0.0.0.0/udp/0/webrtc".parse()?)?
             .map(|(_, conn)| ((), StreamMuxerBox::new(conn)))
             .boxed();
 
         // Combine transports using OrTransport
         let transport = OrTransport::new(tcp_transport, webrtc_transport);
 
-        let swarm = SwarmBuilder::with_tokio_executor()
+        let swarm = SwarmBuilder::with_tokio()
             .transport(transport)
             .behaviour(behaviour)
             .build();
@@ -265,8 +266,9 @@ async fn main() -> AppResult<()> {
 
     let server_handle = tokio::spawn(async move {
         while let Ok((stream, addr)) = listener.accept().await {
+            let peer_map = peer_map.clone();
             tokio::spawn(async move {
-                handle_connection(peer_map.clone(), stream, addr).await;
+                handle_connection(peer_map, stream, addr).await;
             });
         }
     });
