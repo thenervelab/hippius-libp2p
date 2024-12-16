@@ -38,8 +38,8 @@ rtcsync
 EOF
 
 # Restart chrony
-sudo systemctl restart chronyd
-sudo systemctl enable chronyd
+sudo systemctl restart chrony
+sudo systemctl enable chrony
 
 # Verify
 chronyc tracking
@@ -268,49 +268,46 @@ sudo tee /etc/caddy/Caddyfile > /dev/null << 'EOF'
 }
 
 # HTTPS version (uncomment and modify for production)
-# yourdomain.com {
-#     # Web interface
-#     handle /app/* {
-#         reverse_proxy localhost:3000
-#     }
-#
-#     # WebSocket signaling
-#     handle /signal/* {
-#         reverse_proxy localhost:8001
-#     }
-#
-#     # Metrics
-#     handle /metrics {
-#         reverse_proxy localhost:9091
-#         basicauth {
-#             metrics JDJhJDEwJHBsNEZXWk9ZdnQuOWZwYnlVcUx1TE9ZYk5Gd2FmSzBxY0ZQYlFJUTVkSzBRWnVpQXNpVTJL
-#         }
-#     }
-#
-#     # IPFS Gateway
-#     handle /ipfs/* {
-#         reverse_proxy localhost:8080
-#     }
-#
-#     # IPFS API
-#     handle /api/v0/* {
-#         reverse_proxy localhost:5001
-#     }
-#
-#     # Root redirect
-#     handle {
-#         redir /app{uri}
-#     }
-#
-#     # Security headers
-#     header {
-#         Strict-Transport-Security max-age=31536000;
-#         X-Content-Type-Options nosniff
-#         Referrer-Policy no-referrer-when-downgrade
-#         X-XSS-Protection "1; mode=block"
-#         X-Frame-Options DENY
-#     }
-# }
+yourdomain.com {
+    # Web interface
+    handle /app/* {
+        reverse_proxy localhost:3000
+    }
+
+    # WebSocket signaling
+    handle /signal/* {
+        reverse_proxy localhost:8001
+    }
+
+    # Metrics
+    handle /metrics {
+        reverse_proxy localhost:9091
+        basicauth {
+            metrics JDJhJDEwJHBsNEZXWk9ZdnQuOWZwYnlVcUx1TE9ZYk5Gd2FmSzBxY0ZQYlFJUTVkSzBRWnVpQXNpVTJL
+        }
+    }
+
+    # IPFS Gateway
+    handle /ipfs/* {
+        reverse_proxy localhost:8080
+    }
+
+    # IPFS API
+    handle /api/v0/* {
+        reverse_proxy localhost:5001
+    }
+
+
+
+    # Security headers
+    header {
+        Strict-Transport-Security max-age=31536000;
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer-when-downgrade
+        X-XSS-Protection "1; mode=block"
+        X-Frame-Options DENY
+    }
+}
 EOF
 
 # Restart Caddy
