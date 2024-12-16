@@ -1,4 +1,5 @@
 use futures_util::StreamExt;
+use std::env::args;
 use libp2p::{
     core::{
         transport::{Boxed, OrTransport, Transport},
@@ -73,7 +74,7 @@ struct P2pServer {
 }
 
 impl P2pServer {
-    async fn new(peer_map: PeerMap, is_bootnode: bool) -> std::result::Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
+    async fn new(peer_map: PeerMap, is_bootnode: bool, args: &Args) -> std::result::Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
         // Create data directory if it doesn't exist
         let data_dir = if is_bootnode {
             PathBuf::from("data/bootnode")
@@ -157,10 +158,19 @@ impl P2pServer {
 
         // If not a bootnode, connect to bootstrap nodes
         if !is_bootnode {
-            let bootstrap_addresses = vec![
-                "/ip4/127.0.0.1/tcp/4001".parse::<libp2p::Multiaddr>()?,
-                "/ip4/127.0.0.1/tcp/4001/ws".parse::<libp2p::Multiaddr>()?,
+            let default_addresses = vec![
+                format!("/ip4/127.0.0.1/tcp/{}", args.bootnode_port).parse::<libp2p::Multiaddr>()?,
+                format!("/ip4/127.0.0.1/tcp/{}/ws", args.bootnode_port).parse::<libp2p::Multiaddr>()?,
             ];
+
+            let bootstrap_addresses = if let Some(addr) = &args.bootnode_address {
+                vec![
+                    addr.parse::<libp2p::Multiaddr>()?,
+                    format!("{}/ws", addr).parse::<libp2p::Multiaddr>()?,
+                ]
+            } else {
+                default_addresses
+            };
 
             for addr in bootstrap_addresses {
                 swarm.dial(addr)?;
@@ -326,6 +336,10 @@ struct Args {
     /// Port for bootnode
     #[arg(long, default_value = "4002")]
     bootnode_port: u16,
+
+    /// Bootnode address to connect to (e.g., /ip4/127.0.0.1/tcp/4002)
+    #[arg(long)]
+    bootnode_address: Option<String>,
 }
 
 #[tokio::main]
@@ -345,7 +359,7 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
             
             // Start web server, signaling server, and bootnode
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let mut bootnode = P2pServer::new(peer_map.clone(), true).await?;
+            let mut bootnode = P2pServer::new(peer_map.clone(), true, &args).await?;
             println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
             println!("Bootnode PeerID: {}", bootnode.peer_id());
             
@@ -368,7 +382,7 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
         "bootnode" => {
             println!("Starting bootnode...");
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let mut server = P2pServer::new(peer_map.clone(), true).await?;
+            let mut server = P2pServer::new(peer_map.clone(), true, &args).await?;
             println!("Bootnode: /ip4/127.0.0.1/tcp/{}", args.bootnode_port);
             println!("Bootnode PeerID: {}", server.peer_id());
             server.start().await?;
@@ -379,7 +393,7 @@ async fn main() -> std::result::Result<(), Box<dyn StdError + Send + Sync + 'sta
             println!("Signaling server: ws://localhost:{}", args.signaling_port);
             
             let peer_map = Arc::new(RwLock::new(HashMap::new()));
-            let mut server = P2pServer::new(peer_map.clone(), false).await?;
+            let mut server = P2pServer::new(peer_map.clone(), false, &args).await?;
             println!("Node PeerID: {}", server.peer_id());
             
             tokio::join!(

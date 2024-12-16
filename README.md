@@ -107,30 +107,54 @@ cargo run -- --mode all --web-port 3000 --signaling-port 8001 --bootnode-port 40
 
 ## Quick Start
 
-### 1. All-in-One Setup (Recommended for Testing)
-
-Start everything with a single command:
+1. Start a bootnode:
 ```bash
-cargo run -- --mode all
+cargo run -- --mode bootnode --bootnode-port 4002
 ```
 
-This starts:
-- Web client server at http://localhost:3000
-- WebRTC signaling server at ws://localhost:8001
-- P2P bootnode at /ip4/127.0.0.1/tcp/4002
+2. Start additional nodes (each in a new terminal):
+```bash
+# Connect to default bootnode (localhost:4002)
+cargo run -- --mode node
 
-The application will display:
-- URLs for accessing each server
-- The bootnode's peer ID (important for manual connections)
-- Each node's unique peer ID when started
+# Or connect to a specific bootnode
+cargo run -- --mode node --bootnode-address "/ip4/127.0.0.1/tcp/4002"
+```
 
-Then:
-1. Open http://localhost:3000 in multiple browser windows
-2. Watch as peers automatically discover each other
-3. Click on peers to establish WebRTC connections
-4. Start chatting peer-to-peer!
+3. Access the web interface at http://localhost:3000
 
-### 2. Distributed Setup (Production-like Environment)
+## Configuration
+
+### Custom Ports
+
+You can customize the ports using command-line arguments:
+
+```bash
+cargo run -- --mode all \
+  --web-port 3000 \
+  --signaling-port 8001 \
+  --bootnode-port 4002
+```
+
+### Bootnode Connection
+
+Nodes can connect to a specific bootnode by providing its multiaddress:
+
+```bash
+# Start a bootnode on a custom port
+cargo run -- --mode bootnode --bootnode-port 5000
+
+# Connect a node to the custom bootnode
+cargo run -- --mode node --bootnode-address "/ip4/127.0.0.1/tcp/5000"
+```
+
+The bootnode address format follows the libp2p multiaddress specification:
+- TCP: `/ip4/<ip>/tcp/<port>`
+- WebSocket: `/ip4/<ip>/tcp/<port>/ws`
+
+The node will automatically attempt to connect using both TCP and WebSocket transports.
+
+## Distributed Setup
 
 1. Start infrastructure servers:
    ```bash
@@ -150,17 +174,7 @@ Then:
    cargo run -- --mode node
    ```
 
-### 3. Custom Configuration
-
-Customize any port:
-```bash
-cargo run -- --mode all \
-  --web-port 3000 \        # Web client
-  --signaling-port 8001 \  # WebRTC signaling
-  --bootnode-port 4002     # P2P bootnode
-```
-
-### Common Scenarios
+## Common Scenarios
 
 1. Development Testing:
    ```bash
@@ -190,7 +204,7 @@ cargo run -- --mode all \
    - Web client server (http://localhost:3000)
    - Signaling server (ws://localhost:8001)
 
-### Example: Setting Up a Local Test Network
+## Example: Setting Up a Local Test Network
 
 1. Start the bootnode:
    ```bash
@@ -216,7 +230,7 @@ Now you have:
 - Automatic peer discovery
 - Direct peer-to-peer messaging
 
-### Network Information
+## Network Information
 
 When starting nodes, the application displays:
 
@@ -242,7 +256,7 @@ These peer IDs are important for:
 - Manual peer connections
 - Verifying successful peer discovery
 
-### Troubleshooting
+## Troubleshooting
 
 1. If web client shows "Disconnected":
    - Ensure signaling server is running
